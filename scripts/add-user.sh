@@ -99,8 +99,8 @@ service = f"""
     env_file:
       - instances/{name}/.env
     volumes:
-      - ./instances/{name}/workspace:/home/user/.openclaw/workspace
-      - ./instances/{name}/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+      - ./instances/{name}/workspace:/home/node/.openclaw/workspace
+      - ./instances/{name}/openclaw.json:/home/node/.openclaw/openclaw.json
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
