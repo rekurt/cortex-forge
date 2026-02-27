@@ -1,0 +1,3 @@
+[submodule "shared/skills/compliance-risk"]
+	path = shared/skills/compliance-risk
+	url = https://github.com/rekurt/compliance-risk.git
