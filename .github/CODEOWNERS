@@ -1,0 +1,14 @@
+# CODEOWNERS — требуют review при изменении критичных файлов
+* @rekurt
+
+# Безопасность и auth
+quota-proxy/proxy.py          @rekurt
+broker/broker.py              @rekurt
+mcp-server/server.py          @rekurt
+.github/workflows/security.yml @rekurt
+.github/semgrep/               @rekurt
+
+# Инфраструктура
+docker-compose.yml            @rekurt
+scripts/add-user.sh           @rekurt
+scripts/remove-user.sh        @rekurt

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "changelog-sections": [
+    {"type": "feat",     "section": "✨ Новые функции"},
+    {"type": "fix",      "section": "🐛 Исправления"},
+    {"type": "security", "section": "🔒 Безопасность"},
+    {"type": "perf",     "section": "⚡ Производительность"},
+    {"type": "refactor", "section": "♻️ Рефакторинг"},
+    {"type": "docs",     "section": "📚 Документация"},
+    {"type": "ci",       "section": "⚙️ CI/CD", "hidden": false},
+    {"type": "chore",    "section": "🧹 Прочее", "hidden": true}
+  ],
+  "pull-request-title-pattern": "chore: release ${version}",
+  "include-component-in-tag": false,
+  "tag-separator": "",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "VERSION"
+        }
+      ]
+    }
+  }
+}

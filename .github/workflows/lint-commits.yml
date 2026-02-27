@@ -1,0 +1,91 @@
+name: Lint Commits
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [master]
+
+permissions:
+  pull-requests: write
+  statuses: write
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # 1. Заголовок PR — conventional commit
+  # ═══════════════════════════════════════════════════════════
+  pr-title:
+    name: 🏷️ PR Title (Conventional Commits)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Разрешённые типы
+          types: |
+            feat
+            fix
+            security
+            perf
+            refactor
+            docs
+            ci
+            chore
+            test
+            build
+            revert
+          # Разрешённые scопы (опционально)
+          scopes: |
+            broker
+            quota
+            proxy
+            service
+            monitor
+            mcp
+            scripts
+            docker
+            deps
+            auth
+            api
+          requireScope: false
+          subjectPattern: ^[A-Za-zА-Яа-я].+$
+          subjectPatternError: |
+            Тема PR должна начинаться с заглавной буквы.
+            Формат: <type>(<scope>): <описание>
+            Пример: feat(broker): добавить DELETE /inbox
+          wip: true     # разрешить WIP: prefix
+
+  # ═══════════════════════════════════════════════════════════
+  # 2. Все коммиты в PR — conventional commit
+  # ═══════════════════════════════════════════════════════════
+  commits:
+    name: 📝 Commit Messages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate commit messages
+        uses: wagoid/commitlint-github-action@v6
+        with:
+          configFile: .commitlintrc.json
+          failOnWarnings: false
+          helpURL: "https://www.conventionalcommits.org"
+
+  # ═══════════════════════════════════════════════════════════
+  # 3. Проверка наличия CHANGELOG / release-please
+  # ═══════════════════════════════════════════════════════════
+  release-ready:
+    name: 📋 Release Readiness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check VERSION and CHANGELOG exist
+        run: |
+          [ -f VERSION ] || { echo "❌ VERSION файл отсутствует"; exit 1; }
+          [ -f CHANGELOG.md ] || { echo "❌ CHANGELOG.md отсутствует"; exit 1; }
+          echo "✅ VERSION: $(cat VERSION)"
+          echo "✅ CHANGELOG.md присутствует"
