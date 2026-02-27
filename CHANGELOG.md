@@ -5,6 +5,13 @@ All notable changes to corp-assistant will be documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org/).
 Releases are automated via [release-please](https://github.com/googleapis/release-please).
 
+## [0.1.1](https://github.com/rekurt/corp-assistant/compare/v0.1.0...v0.1.1) (2026-02-27)
+
+
+### Bug Fixes
+
+* исправлены падающие GitHub Actions пайплайны ([05dc521](https://github.com/rekurt/corp-assistant/commit/05dc5215d34a99fcebac9fcd44818260eb804d49))
+
 ## [0.1.0] — 2026-02-27
 
 ### ✨ Новые функции
