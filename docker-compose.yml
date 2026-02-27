@@ -30,7 +30,7 @@ services:
       resources:
         limits:
           cpus: "2.0"
-          memory: 512M
+          memory: 1G
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health', timeout=3)"]
@@ -59,7 +59,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
@@ -140,7 +140,7 @@ services:
   #     resources:
   #       limits:
   #         cpus: "2.0"
-  #         memory: 512M
+  #         memory: 1G
   #   depends_on:
   #     quota-proxy:
   #       condition: service_healthy
@@ -174,7 +174,7 @@ services:
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 512M
     depends_on:
       quota-proxy:
         condition: service_healthy
