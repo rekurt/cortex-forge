@@ -47,6 +47,7 @@ for fname in ['USER.md', 'IDENTITY.md']:
 # Генерируем ключи
 BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 QUOTA_KEY=$(python3 -c "import secrets; print('quota-${NAME}-' + secrets.token_urlsafe(24))")
+GATEWAY_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
 
 # .env инстанса
@@ -54,6 +55,7 @@ cat > "$TARGET/.env" << EOF
 # Секреты инстанса $NAME — НЕ коммитить в git!
 TELEGRAM_BOT_TOKEN=$BOT_TOKEN
 TELEGRAM_ALLOW_FROM=${TG_ID}
+GATEWAY_TOKEN=$GATEWAY_TOKEN
 
 # Broker & Quota
 BROKER_URL=http://message-broker:8080
