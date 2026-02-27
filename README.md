@@ -6,8 +6,8 @@
 
 > **Language / Язык:** English | [Русский](README.ru.md)
 
-[![Version](https://img.shields.io/github/v/tag/rekurt/CortexForge?label=version&color=blue)](https://github.com/rekurt/CortexForge/releases)
-[![CI Security](https://github.com/rekurt/CortexForge/actions/workflows/security.yml/badge.svg)](https://github.com/rekurt/CortexForge/actions/workflows/security.yml)
+[![Version](https://img.shields.io/github/v/tag/rekurt/cortex-forge?label=version&color=blue)](https://github.com/rekurt/cortex-forge/releases)
+[![CI Security](https://github.com/rekurt/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/rekurt/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Corporate AI assistant infrastructure built on [OpenClaw](https://github.com/openclaw/openclaw).
@@ -123,7 +123,7 @@ Instances sit on `corp-internal` only — they cannot reach the internet directl
 ### 1. Clone and configure global secrets
 
 ```bash
-git clone https://github.com/rekurt/CortexForge.git /opt/CortexForge
+git clone https://github.com/rekurt/cortex-forge.git /opt/CortexForge
 cd /opt/CortexForge
 
 cp .env.example .env
@@ -413,7 +413,7 @@ GitHub Actions runs on every push and PR:
 - Path traversal in `add-user.sh`
 - Real secrets in `.env.example`
 
-Current version: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/rekurt/CortexForge/releases)
+Current version: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/rekurt/cortex-forge/releases)
 
 ---
 
