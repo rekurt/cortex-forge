@@ -6,8 +6,8 @@
 
 > **Language / Язык:** [English](README.md) | Русский
 
-[![Version](https://img.shields.io/github/v/tag/user-1/CortexForge?label=версия&color=blue)](https://github.com/example-org/CortexForge/releases)
-[![CI Security](https://github.com/example-org/CortexForge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/CortexForge/actions/workflows/security.yml)
+[![Version](https://img.shields.io/github/v/tag/user-1/cortex-forge?label=версия&color=blue)](https://github.com/example-org/cortex-forge/releases)
+[![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
 
 Корпоративная инфраструктура AI-ассистентов на базе [OpenClaw](https://github.com/openclaw/openclaw).
@@ -123,7 +123,7 @@
 ### 1. Клонировать и настроить глобальные секреты
 
 ```bash
-git clone https://github.com/example-org/CortexForge.git /opt/CortexForge
+git clone https://github.com/example-org/cortex-forge.git /opt/CortexForge
 cd /opt/CortexForge
 
 cp .env.example .env
@@ -413,7 +413,7 @@ GitHub Actions запускается при каждом пуше и PR:
 - Path traversal в `add-user.sh`
 - Реальные секреты в `.env.example`
 
-Текущая версия: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/example-org/CortexForge/releases)
+Текущая версия: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/example-org/cortex-forge/releases)
 
 ---
 

@@ -32,7 +32,7 @@ docker compose version    # Docker Compose version 2.x
 ## 2. Клонирование репозитория
 
 ```bash
-git clone https://github.com/example-org/CortexForge.git /opt/CortexForge
+git clone https://github.com/example-org/cortex-forge.git /opt/CortexForge
 cd /opt/CortexForge
 ```
 
