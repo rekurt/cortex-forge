@@ -83,9 +83,7 @@ middle = pick(MIDDLES)
 ending = pick(ENDINGS)
 
 # Иногда без middle (20% случаев)
-seed_check = seed
-seed = (seed * 6364136223846793005 + 1442695040888963407) & 0xFFFFFFFFFFFFFFFF
-if seed % 5 == 0:
+if random.random() < 0.2:
     print(f"{opener} {ending}")
 else:
     print(f"{opener} {middle} {ending}")
