@@ -86,10 +86,11 @@ if [ -f ".env" ]; then
     echo "  ✅ Ключи добавлены в .env"
 fi
 
-# Добавляем сервис в docker-compose.yml
+# Добавляем сервис в docker-compose.override.yml (gitignored — не конфликтует с git pull)
 python3 - "$NAME" "$NAME_UPPER" "$UI_PORT" << 'PYEOF'
-import sys
+import sys, pathlib
 name, NAME_UPPER, ui_port = sys.argv[1], sys.argv[2], sys.argv[3]
+OVERRIDE = "docker-compose.override.yml"
 
 service = f"""
   assistant-{name}:
@@ -130,10 +131,16 @@ service = f"""
       corp.assistant.user: {name}
 """
 
-content = open("docker-compose.yml").read()
-content = content.replace("\nvolumes:", service + "\nvolumes:")
-open("docker-compose.yml", "w").write(content)
-print(f"  ✅ assistant-{name} добавлен в docker-compose.yml")
+p = pathlib.Path(OVERRIDE)
+if p.exists():
+    content = p.read_text()
+    # append before end or after last service
+    content = content.rstrip() + "\n" + service
+else:
+    content = "services:" + service
+
+p.write_text(content)
+print(f"  ✅ assistant-{name} добавлен в {OVERRIDE}")
 PYEOF
 
 echo ""

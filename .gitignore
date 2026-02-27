@@ -1,3 +1,6 @@
+# Пользовательские инстансы — генерируются локально, не конфликтуют с git pull
+docker-compose.override.yml
+
 # Секреты — никогда в git
 .env
 instances/*/.env

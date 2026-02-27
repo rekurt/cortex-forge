@@ -50,13 +50,13 @@ print(f'  ✅ Удалено {removed} ключей из .env')
 " "$NAME_UPPER"
 fi
 
-# Удаляем сервис из docker-compose.yml (построчный парсинг — безопаснее regex)
+# Удаляем сервис из docker-compose.override.yml (построчный парсинг — безопаснее regex)
 python3 -c "
 import sys
 name = sys.argv[1]
 service_key = f'  assistant-{name}:'
 
-with open('docker-compose.yml') as f:
+with open('docker-compose.override.yml') as f:
     lines = f.readlines()
 
 result = []
@@ -84,11 +84,11 @@ for line in lines:
     result.append(line)
 
 if found:
-    with open('docker-compose.yml', 'w') as f:
+    with open('docker-compose.override.yml', 'w') as f:
         f.writelines(result)
-    print(f'  ✅ assistant-{name} удалён из docker-compose.yml')
+    print(f'  ✅ assistant-{name} удалён из docker-compose.override.yml')
 else:
-    print(f'  ⚠️  assistant-{name} не найден в docker-compose.yml')
+    print(f'  ⚠️  assistant-{name} не найден в docker-compose.override.yml')
 " "$NAME"
 
 echo ""
