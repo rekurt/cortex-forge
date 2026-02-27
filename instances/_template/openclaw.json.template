@@ -28,7 +28,7 @@
   "gateway": {
     "mode": "local",
     "port": 18789,
-    "bind": "0.0.0.0",
+    "bind": "lan",
     "auth": {
       "mode": "token",
       "token": "${GATEWAY_TOKEN}"
