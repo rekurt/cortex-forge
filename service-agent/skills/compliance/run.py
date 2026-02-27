@@ -40,7 +40,6 @@ def main():
         print(json.dumps({
             "error": (
                 "enrich.py not found. Mount it via docker-compose volume: "
-                "${ENRICH_PY_PATH}:/app/skills/compliance/enrich.py:ro"
             )
         }))
         sys.exit(1)

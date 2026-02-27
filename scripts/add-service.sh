@@ -43,7 +43,6 @@ cat <<EOF
     volumes:
       - ${NAME}-data:/data
       - ./service-agent/skills:/app/skills:ro
-      - \${ENRICH_PY_PATH:-./service-agent/skills/compliance/enrich_placeholder.py}:/app/skills/compliance/enrich.py:ro
     ports:
       - "127.0.0.1:${PORT}:${PORT}"
     networks:
