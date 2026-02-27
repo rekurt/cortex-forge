@@ -160,10 +160,10 @@ def _drop_privileges(user: str = "app"):
     print(f"[quota] Dropped privileges: uid={uid} gid={gid} ({user})", flush=True)
 
 
+def _now(): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
 _drop_privileges()   # ← вызываем ДО открытия БД (чтобы открыть с правильным uid)
 _conn = _init_db()
-
-def _now(): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 def _audit(action: str, actor: str, target: str = None, detail: str = None):
     with _db_lock:
