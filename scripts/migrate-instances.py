@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""
+Применяет новые миграции воркспейса ко всем существующим инстансам.
+Запускается автоматически из post-merge хука.
+Использование: python3 scripts/migrate-instances.py [--dry-run]
+"""
+import sys
+import importlib.util
+import pathlib
+
+REPO_ROOT   = pathlib.Path(__file__).parent.parent
+MIGRATIONS  = sorted((REPO_ROOT / "migrations").glob("[0-9]*.py"))
+INSTANCES   = REPO_ROOT / "instances"
+APPLIED_FILE = ".migrations_applied"
+DRY_RUN = "--dry-run" in sys.argv
+
+def load_migration(path):
+    spec = importlib.util.spec_from_file_location(path.stem, path)
+    mod  = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+def get_applied(workspace):
+    f = workspace / APPLIED_FILE
+    if not f.exists():
+        return set()
+    return set(l.strip() for l in f.read_text().splitlines() if l.strip())
+
+def mark_applied(workspace, migration_id):
+    f = workspace / APPLIED_FILE
+    applied = get_applied(workspace)
+    applied.add(migration_id)
+    f.write_text("\n".join(sorted(applied)) + "\n")
+
+def run():
+    if not MIGRATIONS:
+        print("  Нет миграций.")
+        return
+
+    instances = [
+        d for d in INSTANCES.iterdir()
+        if d.is_dir()
+        and d.name not in ("_template",)
+        and (d / "openclaw_data" / "workspace").exists()
+    ]
+
+    if not instances:
+        print("  Нет инстансов для обновления.")
+        return
+
+    for instance_dir in sorted(instances):
+        workspace = instance_dir / "openclaw_data" / "workspace"
+        applied   = get_applied(workspace)
+        pending   = [m for m in MIGRATIONS if m.stem not in applied]
+
+        if not pending:
+            print(f"  [{instance_dir.name}] актуален")
+            continue
+
+        print(f"  [{instance_dir.name}] применяю {len(pending)} миграций:")
+        for mig_path in pending:
+            mod = load_migration(mig_path)
+            mid = mig_path.stem
+            desc = getattr(mod, "DESCRIPTION", mid)
+            try:
+                if DRY_RUN:
+                    print(f"    [dry] {mid}: {desc}")
+                else:
+                    mod.apply(workspace)
+                    mark_applied(workspace, mid)
+                    print(f"    ✅ {mid}: {desc}")
+            except Exception as e:
+                print(f"    ❌ {mid}: {e}")
+
+if __name__ == "__main__":
+    run()

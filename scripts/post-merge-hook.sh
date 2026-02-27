@@ -58,6 +58,8 @@ fi
 if echo "$REBUILD_LIST" | grep -q "__all__"; then
   echo "  🐳 docker-compose.yml изменился — пересобираю всё..."
   $COMPOSE up -d --build 2>&1 | grep -E "(Building|built|Started|Recreated|error)" || true
+  echo "  🗄️  Применяю миграции воркспейсов..."
+  python3 "$REPO_ROOT/scripts/migrate-instances.py"
   echo "  ✅ Готово."
   exit 0
 fi
@@ -78,5 +80,9 @@ if echo "$RESTART_LIST" | grep -q "user-instances"; then
     $COMPOSE restart $USERS 2>&1 | grep -E "(Restarting|Started|error)" || true
   fi
 fi
+
+# Применить миграции воркспейсов инстансов
+echo "  🗄️  Применяю миграции воркспейсов..."
+python3 "$REPO_ROOT/scripts/migrate-instances.py"
 
 echo "  ✅ Готово."

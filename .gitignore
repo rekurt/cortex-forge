@@ -35,3 +35,7 @@ Thumbs.db
 
 # Greeting counter state
 shared/skills/corp-greeting/.greeting_counter
+
+# Migration state per instance (local)
+instances/*/.migrations_applied
+instances/*/openclaw_data/.migrations_applied
