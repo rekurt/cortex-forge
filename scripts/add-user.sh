@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # add-user.sh — онбординг нового сотрудника
-# Использование: bash scripts/add-user.sh <name> <bot_token> <full_name> <tg_id>
+# Использование: make add-user NAME=alexey BOT_TOKEN=7xxx FULL_NAME="Алексей Михайлюк" TG_ID=123456789
 
 set -e
 
@@ -11,28 +11,23 @@ TG_ID="${4:-}"
 TEMPLATE="instances/_template"
 TARGET="instances/$NAME"
 
-if [ -d "$TARGET" ]; then
-  echo "❌ Инстанс '$NAME' уже существует: $TARGET"
-  exit 1
-fi
+[ -d "$TARGET" ] && echo "❌ Инстанс '$NAME' уже существует" && exit 1
 
-echo "🚀 Создаём инстанс для: $FULL_NAME ($NAME)"
+echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
-# Создаём директории
 mkdir -p "$TARGET/workspace/memory"
-mkdir -p "$TARGET/workspace/skills"
 
-# Копируем шаблоны workspace
+# Копируем шаблоны воркспейса
 cp -r "$TEMPLATE/workspace/"* "$TARGET/workspace/"
-
-# Подставляем имя
 sed -i "s/{{FULL_NAME}}/$FULL_NAME/g" "$TARGET/workspace/USER.md"
-sed -i "s/{{NAME}}/$NAME/g"          "$TARGET/workspace/USER.md"
+sed -i "s/{{NAME}}/$NAME/g"           "$TARGET/workspace/USER.md"
 sed -i "s/{{FULL_NAME}}/$FULL_NAME/g" "$TARGET/workspace/IDENTITY.md"
-sed -i "s/{{NAME}}/$NAME/g"          "$TARGET/workspace/IDENTITY.md"
+sed -i "s/{{NAME}}/$NAME/g"           "$TARGET/workspace/IDENTITY.md"
 
-# Генерируем уникальный API-ключ для брокера
+# Генерируем ключи
 BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+QUOTA_KEY=$(python3 -c "import secrets; print('quota-${NAME}-' + secrets.token_urlsafe(24))")
+NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
 
 # .env инстанса
 cat > "$TARGET/.env" << EOF
@@ -40,7 +35,7 @@ cat > "$TARGET/.env" << EOF
 TELEGRAM_BOT_TOKEN=$BOT_TOKEN
 TELEGRAM_ALLOW_FROM=${TG_ID}
 
-# Message broker
+# Broker & Quota
 BROKER_URL=http://message-broker:8080
 BROKER_KEY=$BROKER_KEY
 
@@ -52,24 +47,23 @@ BROKER_KEY=$BROKER_KEY
 # GITLAB_TOKEN=
 EOF
 
-# Добавляем ключ брокера в глобальный .env
-NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
-if [ -f ".env" ]; then
-  echo "BROKER_KEY_${NAME_UPPER}=${BROKER_KEY}" >> .env
-  echo "  ✅ BROKER_KEY_${NAME_UPPER} добавлен в .env"
-fi
-
-# openclaw.json
+# OpenClaw конфиг
 cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw.json"
 sed -i "s/{{BOT_TOKEN}}/$BOT_TOKEN/g" "$TARGET/openclaw.json"
 sed -i "s/{{TG_ID}}/$TG_ID/g"        "$TARGET/openclaw.json"
 
-# Добавляем сервис в docker-compose.yml
-python3 - "$NAME" << 'PYEOF'
-import sys, re
+# Добавляем ключи в глобальный .env
+if [ -f ".env" ]; then
+    echo "BROKER_KEY_${NAME_UPPER}=${BROKER_KEY}"  >> .env
+    echo "QUOTA_KEY_${NAME_UPPER}=${QUOTA_KEY}"    >> .env
+    echo "QUOTA_LIMIT_${NAME_UPPER}=1000000"       >> .env  # 1M токенов/мес по умолчанию
+    echo "  ✅ Ключи добавлены в .env"
+fi
 
-name = sys.argv[1]
-NAME_UPPER = name.upper()
+# Добавляем сервис в docker-compose.yml
+python3 - "$NAME" "$NAME_UPPER" << 'PYEOF'
+import sys
+name, NAME_UPPER = sys.argv[1], sys.argv[2]
 
 service = f"""
   assistant-{name}:
@@ -83,12 +77,14 @@ service = f"""
       - ./instances/{name}/openclaw.json:/home/user/.openclaw/openclaw.json:ro
       - ./shared/skills:/shared/skills:ro
     environment:
-      - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}
+      - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
+      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
     networks:
       - corp-net
     depends_on:
+      - quota-proxy
       - message-broker
     labels:
       corp.assistant.role: personal
@@ -96,16 +92,16 @@ service = f"""
 """
 
 content = open("docker-compose.yml").read()
-# Вставляем перед блоком networks:
-content = content.replace("\nnetworks:", service + "\nnetworks:")
+content = content.replace("\nvolumes:", service + "\nvolumes:")
 open("docker-compose.yml", "w").write(content)
-print(f"  ✅ Сервис assistant-{name} добавлен в docker-compose.yml")
+print(f"  ✅ assistant-{name} добавлен в docker-compose.yml")
 PYEOF
 
 echo ""
-echo "✅ Инстанс '$NAME' создан: $TARGET"
+echo "✅ Инстанс '$NAME' создан"
+echo "   Квота: 1,000,000 токенов/мес (изменить: make set-limit NAME=$NAME LIMIT=500000)"
 echo ""
-echo "📋 Следующие шаги:"
-echo "  1. Заполни секреты: nano $TARGET/.env"
-echo "  2. Настрой персонажа: nano $TARGET/workspace/SOUL.md"
+echo "📋 Далее:"
+echo "  1. nano instances/$NAME/.env          — персональные токены"
+echo "  2. nano instances/$NAME/workspace/SOUL.md  — настроить персонажа"
 echo "  3. make deploy"
