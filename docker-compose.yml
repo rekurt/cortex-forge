@@ -1,0 +1,33 @@
+services:
+  # ──────────────────────────────────────────────────────
+  # Шаблон — скопируй секцию для каждого нового сотрудника
+  # Команда: make add-user NAME=alexey BOT_TOKEN=xxx
+  # ──────────────────────────────────────────────────────
+
+  # assistant-nikita:
+  #   image: ghcr.io/openclaw/openclaw:latest
+  #   container_name: corp-nikita
+  #   restart: unless-stopped
+  #   env_file:
+  #     - instances/nikita/.env
+  #   volumes:
+  #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
+  #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+  #     - ./shared/skills:/shared/skills:ro
+  #   environment:
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  #   labels:
+  #     corp.assistant.user: nikita
+
+  # assistant-alexey:
+  #   image: ghcr.io/openclaw/openclaw:latest
+  #   container_name: corp-alexey
+  #   restart: unless-stopped
+  #   env_file:
+  #     - instances/alexey/.env
+  #   volumes:
+  #     - ./instances/alexey/workspace:/home/user/.openclaw/workspace
+  #     - ./instances/alexey/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+  #     - ./shared/skills:/shared/skills:ro
+  #   environment:
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
