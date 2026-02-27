@@ -10,7 +10,7 @@ Hardening:
   - Message size limit in inbox
 """
 
-import json, os, time, hashlib, hmac, threading
+import json, os, signal, time, hashlib, hmac, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from collections import defaultdict, deque
 from urllib.parse import urlparse
@@ -145,6 +145,21 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[broker] {sender} → {to}: {message[:60]}", flush=True)
         self._json(200, {"ok": True, "from": sender, "to": to})
 
+    def do_DELETE(self):
+        if urlparse(self.path).path != "/inbox":
+            self._json(404, {"error": "Not found"}); return
+
+        sender = _auth(self)
+        if not sender:
+            self._json(403, {"error": "Unauthorized"}); return
+
+        with _lock:
+            count = len(_inbox[sender])
+            _inbox[sender].clear()
+
+        print(f"[broker] {sender} очистил inbox ({count} сообщений)", flush=True)
+        self._json(200, {"ok": True, "deleted": count})
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("BROKER_PORT", 8080))
@@ -152,4 +167,14 @@ if __name__ == "__main__":
         print("⚠️  Нет API-ключей!", flush=True)
     else:
         print(f"✅ Broker hardened :{port} | instances: {sorted(set(_keys.values()))}", flush=True)
-    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+
+    server = HTTPServer(("0.0.0.0", port), Handler)
+
+    def _shutdown(signum, frame):
+        print(f"[broker] Получен сигнал {signum}, завершаем...", flush=True)
+        threading.Thread(target=server.shutdown).start()
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
+    server.serve_forever()

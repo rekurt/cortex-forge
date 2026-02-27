@@ -15,16 +15,19 @@ Hardening:
   - Лимиты в SQLite (переживают рестарт, меняются без рестарта)
 """
 
-import json, os, sqlite3, threading, time, hmac, hashlib, collections
+import json, os, signal, sqlite3, threading, time, hmac, hashlib, collections
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 # ── Конфиг ─────────────────────────────────────────────────────────────────
 UPSTREAM         = "https://api.anthropic.com"
-REAL_API_KEY     = os.environ["ANTHROPIC_API_KEY"]
+REAL_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
 ADMIN_TOKEN      = os.environ.get("QUOTA_ADMIN_TOKEN", "")
+
+if not REAL_API_KEY:
+    raise RuntimeError("ANTHROPIC_API_KEY не задан — proxy не может работать без реального ключа")
 DB_PATH          = os.environ.get("QUOTA_DB", "/data/quota.db")
 PORT             = int(os.environ.get("QUOTA_PORT", 9090))
 DEFAULT_MONTHLY  = int(os.environ.get("QUOTA_DEFAULT_MONTHLY", 1_000_000))
@@ -376,6 +379,14 @@ class Handler(BaseHTTPRequestHandler):
                 resp_ct = r.headers.get("Content-Type", "application/json")
         except HTTPError as e:
             resp_body, resp_status, resp_ct = e.read(), e.code, "application/json"
+        except URLError as e:
+            print(f"[quota] UPSTREAM ERROR {instance}: {e}", flush=True)
+            self._json(502, {"type": "error", "error": "upstream_unavailable",
+                             "message": f"Anthropic API недоступен: {e.reason}"}); return
+        except Exception as e:
+            print(f"[quota] UNEXPECTED ERROR {instance}: {e}", flush=True)
+            self._json(502, {"type": "error", "error": "proxy_error",
+                             "message": "Внутренняя ошибка proxy"}); return
 
         # Считаем токены из ответа
         try:
@@ -406,4 +417,15 @@ if __name__ == "__main__":
     print(f"   Инстансы: {instances}", flush=True)
     print(f"   DB: {DB_PATH} (WAL mode)", flush=True)
     print(f"   Max body: {MAX_BODY_BYTES//1024}KB", flush=True)
-    HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
+
+    server = HTTPServer(("0.0.0.0", PORT), Handler)
+
+    def _shutdown(signum, frame):
+        print(f"[quota] Получен сигнал {signum}, завершаем...", flush=True)
+        threading.Thread(target=server.shutdown).start()
+        _conn.close()
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
+    server.serve_forever()
