@@ -62,8 +62,14 @@ EOF
 
 # OpenClaw конфиг
 cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw.json"
-sed -i "s/{{BOT_TOKEN}}/$BOT_TOKEN/g" "$TARGET/openclaw.json"
-sed -i "s/{{TG_ID}}/$TG_ID/g"        "$TARGET/openclaw.json"
+python3 -c "
+import sys, pathlib
+bot_token, tg_id, path = sys.argv[1], sys.argv[2], sys.argv[3]
+p = pathlib.Path(path)
+text = p.read_text()
+text = text.replace('{{BOT_TOKEN}}', bot_token).replace('{{TG_ID}}', tg_id)
+p.write_text(text)
+" "$BOT_TOKEN" "$TG_ID" "$TARGET/openclaw.json"
 
 # Добавляем ключи в глобальный .env
 if [ -f ".env" ]; then
@@ -94,6 +100,7 @@ service = f"""
       - ANTHROPIC_BASE_URL=http://quota-proxy:9090
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
+      - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
     security_opt:
