@@ -45,7 +45,7 @@ jobs:
           else
             echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
           fi
-          echo "Релиз: $VERSION (pre=${{ steps.parse.outputs.is_prerelease }})"
+          echo "Релиз: $VERSION (pre-release: $([[ "$VERSION" == *"-"* ]] && echo true || echo false))"
 
   # ═══════════════════════════════════════════════════════════
   # 2. Запускаем security checks перед релизом
@@ -118,10 +118,6 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
-          build-args: |
-            VERSION=${{ needs.version.outputs.version }}
-            BUILD_DATE=${{ github.event.head_commit.timestamp }}
-            VCS_REF=${{ github.sha }}
 
       - name: Generate SBOM (SPDX)
         uses: anchore/sbom-action@v0
@@ -224,10 +220,10 @@ jobs:
           files: |
             sboms/*.spdx.json
           generate_release_notes: false
-          make_latest: ${{ needs.version.outputs.is_prerelease == 'false' }}
+          make_latest: "${{ !contains(github.ref_name, '-') }}"
 
       - name: Tag major + minor aliases
-        if: needs.version.outputs.is_prerelease == 'false'
+        if: ${{ !contains(github.ref_name, '-') }}
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"

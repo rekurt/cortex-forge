@@ -13,6 +13,7 @@ Python stdlib only. No pip.
 """
 
 import os
+import re
 import json
 import time
 import sqlite3
@@ -358,6 +359,17 @@ class ServiceHandler(BaseHTTPRequestHandler):
 
             if not skill_id:
                 send_json(self, {"status": "error", "error": "Missing 'skill' field"}, 400)
+                return
+
+            # Validate skill_id: alphanumeric + dashes/underscores only, no path traversal
+            if not re.match(r'^[a-z][a-z0-9_-]{0,63}$', skill_id):
+                send_json(self, {"status": "error", "error": "Invalid skill name"}, 400)
+                return
+
+            # Whitelist check: skill must be in loaded skills directory
+            _loaded_skills = load_skills()
+            if skill_id not in _loaded_skills:
+                send_json(self, {"status": "error", "error": f"Unknown skill: {skill_id}"}, 404)
                 return
 
             log.info(f"Run skill={skill_id} caller={caller}")

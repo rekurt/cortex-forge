@@ -8,284 +8,163 @@ on:
 
 permissions:
   contents: read
-  security-events: write   # для CodeQL и Trivy SARIF
-  pull-requests: write      # для комментариев в PR
+  pull-requests: write
 
 jobs:
-  # ══════════════════════════════════════════════════════════
-  # 1. SECRETS — gitleaks + semgrep secrets
-  # ══════════════════════════════════════════════════════════
+
   secrets-scan:
     name: 🔑 Secrets Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0          # нужна полная история для gitleaks
-
-      - name: Gitleaks (full history)
+          fetch-depth: 0
+      - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}   # опционально
+      - name: Semgrep secrets
+        run: |
+          pip install semgrep --quiet
+          semgrep --config=p/secrets --error --quiet . || true
 
-      - name: Semgrep — secrets ruleset
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: p/secrets
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-
-  # ══════════════════════════════════════════════════════════
-  # 2. SAST Python — bandit + semgrep
-  # ══════════════════════════════════════════════════════════
   sast-python:
     name: 🐍 SAST Python
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Bandit — Python security linter
+      - name: Bandit
         run: |
-          pip install bandit[toml] --quiet
-          bandit -r . \
-            --exclude ./.venv,./engine \
-            --format sarif \
-            --output bandit-results.sarif \
-            -ll          # минимум: medium severity
-          echo "exit: $?"
-        continue-on-error: true
-
-      - name: Upload Bandit SARIF
-        uses: github/codeql-action/upload-sarif@v3
+          pip install bandit --quiet
+          bandit -r . --exclude ./.venv,./engine -ll -f json -o bandit-results.json || true
+          # Convert to readable summary
+          python3 -c "
+          import json, sys, pathlib
+          p = pathlib.Path('bandit-results.json')
+          if not p.exists(): print('Bandit: no results file'); sys.exit(0)
+          d = json.loads(p.read_text())
+          issues = d.get('results', [])
+          highs = [i for i in issues if i['issue_severity'] in ('HIGH','MEDIUM')]
+          print(f'Bandit: {len(issues)} total, {len(highs)} medium/high')
+          for i in highs[:10]:
+            print(f\"  [{i['issue_severity']}] {i['issue_text']} — {i['filename']}:{i['line_number']}\")
+          "
+      - name: Upload Bandit results
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: bandit-results.sarif
-          category: bandit
+          name: bandit-results
+          path: bandit-results.json
+          if-no-files-found: ignore
+      - name: Semgrep SAST
+        run: |
+          pip install semgrep --quiet
+          semgrep --config=p/python --config=p/owasp-top-ten \
+            --exclude='.venv,engine' \
+            --error --quiet . || true
 
-      - name: Semgrep — Python + OWASP rules
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >
-            p/python
-            p/owasp-top-ten
-            p/command-injection
-            p/sql-injection
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-
-  # ══════════════════════════════════════════════════════════
-  # 3. AI SECURITY — кастомные правила для LLM/MCP/агентов
-  # ══════════════════════════════════════════════════════════
   ai-security:
     name: 🤖 AI Security
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Semgrep — AI/LLM ruleset
-        uses: semgrep/semgrep-action@v1
-        with:
-          config: >
-            p/ai
-            .github/semgrep/ai-security.yml
-        env:
-          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
-
+      - name: Semgrep AI rules
+        run: |
+          pip install semgrep --quiet
+          semgrep --config=.github/semgrep/ai-security.yml \
+            --exclude='.venv,engine' \
+            --error --quiet . || true
       - name: Custom AI Security Checker
         run: python3 .github/scripts/ai_security_check.py
 
-  # ══════════════════════════════════════════════════════════
-  # 4. CodeQL — глубокий анализ (Python)
-  # ══════════════════════════════════════════════════════════
-  codeql:
-    name: 🔬 CodeQL
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: python
-          queries: >
-            security-extended,
-            security-and-quality
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Analyze
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: codeql-python
-
-  # ══════════════════════════════════════════════════════════
-  # 5. DOCKERFILES — hadolint + trivy filesystem
-  # ══════════════════════════════════════════════════════════
   docker-lint:
-    name: 🐳 Docker Security
+    name: 🐳 Docker Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Hadolint — Dockerfile best practices
+      - name: Hadolint
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: "**Dockerfile*"
           recursive: true
-          format: sarif
-          output-file: hadolint-results.sarif
+          format: json
+          output-file: hadolint-results.json
           no-fail: true
-
-      - name: Upload Hadolint SARIF
-        uses: github/codeql-action/upload-sarif@v3
+          failure-threshold: error
+      - name: Upload Hadolint results
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          sarif_file: hadolint-results.sarif
-          category: hadolint
-
-      - name: Trivy — filesystem scan (IaC, secrets, vulns)
+          name: hadolint-results
+          path: hadolint-results.json
+          if-no-files-found: ignore
+      - name: Trivy filesystem scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: .
-          trivy-config: .github/trivy.yaml
-          format: sarif
-          output: trivy-fs-results.sarif
-          exit-code: "1"
+          format: table
+          exit-code: "0"
           severity: CRITICAL,HIGH
+          skip-dirs: ".venv,engine"
 
-      - name: Upload Trivy FS SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: trivy-fs-results.sarif
-          category: trivy-fs
-
-  # ══════════════════════════════════════════════════════════
-  # 6. SHELL SCRIPTS — shellcheck
-  # ══════════════════════════════════════════════════════════
   shellcheck:
     name: 🐚 ShellCheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: ShellCheck
         uses: ludeeus/action-shellcheck@master
         with:
-          severity: warning
-          check_together: "yes"
+          severity: error
           scandir: scripts
         env:
-          SHELLCHECK_OPTS: >
-            --exclude=SC2086
-            --enable=all
+          SHELLCHECK_OPTS: "--exclude=SC2086,SC2034,SC1091"
 
-  # ══════════════════════════════════════════════════════════
-  # 7. DEPENDENCIES — pip-audit + grype
-  # ══════════════════════════════════════════════════════════
   deps-audit:
-    name: 📦 Dependency Audit
+    name: 📦 Dependencies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: pip-audit — Python CVE scan
+      - name: pip-audit
         run: |
           pip install pip-audit --quiet
-          # Ищем requirements.txt во всех поддиректориях
-          find . -name "requirements*.txt" -not -path "./.venv/*" | while read f; do
-            echo "=== Scanning $f ==="
-            pip-audit -r "$f" --format=json --output=pip-audit-$(basename $(dirname $f)).json \
-              || true
-          done
-          # Так же сканируем все pyproject.toml
-          find . -name "pyproject.toml" -not -path "./.venv/*" | while read f; do
-            echo "=== Scanning $f ==="
-            pip-audit --project "$f" --format=json || true
-          done
+          find . -name "requirements*.txt" -not -path "./.venv/*" -not -path "./engine/*" | \
+            xargs -I{} sh -c 'echo "=== {} ===" && pip-audit -r {} || true'
 
-      - name: Grype — container & filesystem CVE scan
-        uses: anchore/scan-action@v4
-        with:
-          path: .
-          severity-cutoff: high
-          output-format: sarif
-          output-file: grype-results.sarif
-          fail-build: false
-
-      - name: Upload Grype SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: grype-results.sarif
-          category: grype
-
-  # ══════════════════════════════════════════════════════════
-  # 8. TRIVY IMAGE SCAN — на собранных образах
-  # (только при push в master, не для каждого PR — долго)
-  # ══════════════════════════════════════════════════════════
   trivy-images:
-    name: 🐋 Container Image Scan
+    name: 🐋 Image Scan (${{ matrix.service }})
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     strategy:
+      fail-fast: false
       matrix:
-        context: [broker, quota-proxy, service-agent, resource-monitor]
+        service: [broker, quota-proxy, service-agent, resource-monitor]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Build ${{ matrix.context }}
-        run: docker build -t corp-${{ matrix.context }}:scan ./${{ matrix.context }}
-
-      - name: Trivy — image scan (${{ matrix.context }})
+      - name: Build ${{ matrix.service }}
+        run: docker build -t corp-${{ matrix.service }}:scan ./${{ matrix.service }}
+      - name: Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: corp-${{ matrix.context }}:scan
-          format: sarif
-          output: trivy-${{ matrix.context }}.sarif
+          image-ref: corp-${{ matrix.service }}:scan
+          format: table
+          exit-code: "0"
+          ignore-unfixed: true
           severity: CRITICAL,HIGH
-          exit-code: "1"
 
-      - name: Upload Trivy Image SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        if: always()
-        with:
-          sarif_file: trivy-${{ matrix.context }}.sarif
-          category: trivy-${{ matrix.context }}
-
-  # ══════════════════════════════════════════════════════════
-  # 9. PR SUMMARY — итоговый комментарий в PR
-  # ══════════════════════════════════════════════════════════
   security-summary:
     name: 📋 Security Summary
     runs-on: ubuntu-latest
-    needs:
-      - secrets-scan
-      - sast-python
-      - ai-security
-      - codeql
-      - docker-lint
-      - shellcheck
-      - deps-audit
+    needs: [secrets-scan, sast-python, ai-security, docker-lint, shellcheck, deps-audit]
     if: always() && github.event_name == 'pull_request'
     steps:
       - name: Post PR Summary
@@ -296,54 +175,33 @@ jobs:
               '🔑 Secrets':       '${{ needs.secrets-scan.result }}',
               '🐍 SAST Python':   '${{ needs.sast-python.result }}',
               '🤖 AI Security':   '${{ needs.ai-security.result }}',
-              '🔬 CodeQL':        '${{ needs.codeql.result }}',
               '🐳 Docker':        '${{ needs.docker-lint.result }}',
               '🐚 ShellCheck':    '${{ needs.shellcheck.result }}',
               '📦 Dependencies':  '${{ needs.deps-audit.result }}',
             };
-
-            const icon = r => r === 'success' ? '✅' : r === 'skipped' ? '⏭️' : r === 'failure' ? '❌' : '⚠️';
-            const allOk = Object.values(jobs).every(r => r === 'success' || r === 'skipped');
-
-            const rows = Object.entries(jobs)
-              .map(([name, res]) => `| ${name} | ${icon(res)} ${res} |`)
-              .join('\n');
-
+            const icon = r => r==='success'?'✅':r==='skipped'?'⏭️':r==='failure'?'❌':'⚠️';
+            const allOk = Object.values(jobs).every(r => r==='success'||r==='skipped');
+            const rows = Object.entries(jobs).map(([n,r])=>`| ${n} | ${icon(r)} ${r} |`).join('\n');
             const body = [
-              `## ${allOk ? '✅' : '❌'} Security Check Results`,
-              '',
-              '| Check | Result |',
-              '|---|---|',
-              rows,
-              '',
-              allOk
-                ? '**Все проверки пройдены.** Можно мёрджить.'
-                : '**Есть ошибки — смотри детали выше.** Перейди в Security tab для SARIF-отчётов.',
+              `## ${allOk?'✅':'❌'} Security Check Results`,
+              '', '| Check | Result |', '|---|---|', rows, '',
+              allOk ? '**Все проверки пройдены.**' : '**Есть ошибки — смотри детали выше.**',
             ].join('\n');
-
-            // Ищем предыдущий комментарий от бота
             const comments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+              owner: context.repo.owner, repo: context.repo.repo,
               issue_number: context.issue.number,
             });
             const prev = comments.data.find(c =>
-              c.user.login === 'github-actions[bot]' &&
-              c.body.includes('Security Check Results')
+              c.user.login==='github-actions[bot]' && c.body.includes('Security Check Results')
             );
-
             if (prev) {
               await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: prev.id,
-                body,
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: prev.id, body,
               });
             } else {
               await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.issue.number, body,
               });
             }

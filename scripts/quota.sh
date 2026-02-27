@@ -9,7 +9,6 @@ set -e
 [ -f .env ] && source .env 2>/dev/null || true
 PROXY_URL="${QUOTA_PROXY_URL:-http://quota-proxy:9090}"
 ADMIN_TOKEN="${QUOTA_ADMIN_TOKEN:-changeme}"
-AUTH="-H \"Authorization: Bearer $ADMIN_TOKEN\""
 
 CMD="$1"
 
