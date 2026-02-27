@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills
+.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -18,6 +18,10 @@ remove-user:
 deploy:
 	docker compose up -d --build
 	@echo "✅ Все инстансы запущены"
+
+# make install-hooks — автоперезапуск контейнеров при git pull
+install-hooks:
+	@bash scripts/install-hooks.sh
 
 # make restart NAME=alexey
 restart:
