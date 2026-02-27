@@ -102,7 +102,8 @@ service = f"""
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
       - NODE_OPTIONS=--max-old-space-size=768
     networks:
-      - corp-internal
+      - corp-internal    # quota-proxy + broker (internal)
+      - corp-outbound    # Telegram API + внешние вызовы
     security_opt:
       - no-new-privileges:true
     deploy:
