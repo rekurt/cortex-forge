@@ -20,8 +20,7 @@ import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection
 from datetime import datetime, timezone
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
+from urllib.parse import urlparse
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
@@ -49,6 +48,27 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 log = logging.getLogger("monitor")
+
+# ── UTF-8 safe HTTP helper ───────────────────────────────────────────────────
+
+def _http(method: str, url: str, body: bytes = None, headers: dict = None) -> bytes:
+    """Make HTTP request using http.client directly — avoids urllib latin-1 issues."""
+    p = urlparse(url)
+    host, port = p.hostname, p.port or (443 if p.scheme == "https" else 80)
+    path = p.path or "/"
+    if p.query:
+        path += "?" + p.query
+    conn = HTTPConnection(host, port, timeout=10)
+    try:
+        h = {k: str(v) for k, v in (headers or {}).items()}
+        if body is not None:
+            h.setdefault("Content-Length", str(len(body)))
+        conn.request(method, path, body=body, headers=h)
+        resp = conn.getresponse()
+        return resp.read()
+    finally:
+        conn.close()
+
 
 # ── Shared state (protected by lock) ─────────────────────────────────────────
 
@@ -176,10 +196,9 @@ def get_disk_usage() -> dict:
 
 def get_quota_report() -> dict:
     try:
-        url = f"{QUOTA_PROXY_URL}/quota/report"
-        req = Request(url, headers={"Authorization": f"Bearer {QUOTA_ADMIN_TOKEN}"})
-        with urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read())
+        raw = _http("GET", f"{QUOTA_PROXY_URL}/quota/report",
+                    headers={"Authorization": f"Bearer {QUOTA_ADMIN_TOKEN}"})
+        return json.loads(raw.decode("utf-8"))
     except Exception as e:
         log.warning(f"quota report failed: {e}")
         return {}
@@ -247,18 +266,11 @@ def send_alert(key: str, message: str):
             "to":      "admin",
             "subject": f"[ALERT] {key}",
             "body":    message,
-        }).encode()
-        req = Request(
-            f"{BROKER_URL}/send",
-            data=body,
-            headers={
-                "Content-Type":  "application/json",
-                "Authorization": f"Bearer {BROKER_KEY_MONITOR}",
-            },
-            method="POST",
-        )
-        with urlopen(req, timeout=10) as resp:
-            resp.read()
+        }, ensure_ascii=False).encode("utf-8")
+        _http("POST", f"{BROKER_URL}/send", body=body, headers={
+            "Content-Type":  "application/json; charset=utf-8",
+            "Authorization": f"Bearer {BROKER_KEY_MONITOR}",
+        })
     except Exception as e:
         log.warning(f"Failed to send alert to broker: {e}")
 
