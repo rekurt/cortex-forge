@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Resource Monitor — HTTP + polling service for CortexForge infrastructure.
+CortexForge Monitor — resource metrics & alerting (HTTP + polling).
 
 Polls Docker Stats API + disk usage + quota-proxy every MONITOR_INTERVAL seconds.
 Stores metrics in SQLite, sends alerts to message-broker.
