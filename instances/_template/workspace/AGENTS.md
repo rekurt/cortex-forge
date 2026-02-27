@@ -24,6 +24,10 @@ Write things down. Mental notes don't survive restarts.
 Корпоративные скиллы доступны в `/shared/skills/`.
 Читай их SKILL.md при необходимости.
 
+| Скилл | Путь | Когда использовать |
+|---|---|---|
+| `compliance-risk` | `/shared/skills/compliance-risk/SKILL.md` | Проверка контрагента по ИНН/ОГРН/УНП/БИН, AML/KYC оценка риска, санкционный скрининг |
+
 ## Tools
 
 Смотри `TOOLS.md` для локальных заметок об инструментах.
