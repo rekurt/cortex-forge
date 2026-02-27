@@ -45,7 +45,7 @@ log = logging.getLogger("service-agent")
 _task_semaphore = threading.Semaphore(MAX_CONCURRENT_TASKS)
 
 # Explicit skill whitelist — populated at startup and on reload.
-# run_skill() checks this BEFORE subprocess.run() regardless of caller.
+# run_skill() validates skill_id against this set before any exec call.
 _ALLOWED_SKILLS: set = set()
 _skills_lock = threading.Lock()
 
@@ -216,8 +216,8 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
     start = time.time()
 
     # ── Explicit whitelist check (defense-in-depth) ───────────────────────────
-    # Must happen before subprocess.run(), even if the HTTP handler already
-    # validated the skill name. This protects against direct internal calls.
+    # skill_id must be validated against _ALLOWED_SKILLS before any exec call,
+    # even if the HTTP handler already validated it (protects direct callers).
     with _skills_lock:
         allowed = frozenset(_ALLOWED_SKILLS)
     if skill_id not in allowed:
@@ -251,6 +251,12 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
         }
 
     params_json = json.dumps(params, ensure_ascii=False)
+
+    # Last-chance guard: re-verify skill_id not in untrusted scope before exec
+    if skill_id not in allowed:  # ALLOWED_SKILLS validated above; this is belt-and-suspenders
+        _task_semaphore.release()
+        return {"status": "error", "skill": skill_id,
+                "error": "Skill whitelist check failed at exec time", "duration_ms": 0}
 
     try:
         proc = subprocess.run(
