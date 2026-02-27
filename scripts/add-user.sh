@@ -28,16 +28,16 @@ fi
 
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
-mkdir -p "$TARGET/workspace/memory"
+mkdir -p "$TARGET/openclaw_data/workspace/memory"
 
 # Копируем шаблоны воркспейса
-cp -r "$TEMPLATE/workspace/"* "$TARGET/workspace/"
+cp -r "$TEMPLATE/workspace/"* "$TARGET/openclaw_data/workspace/"
 # Используем Python для подстановки — безопасно для спецсимволов в FULL_NAME (/, &, \)
 python3 -c "
 import sys, pathlib
 name, full_name = sys.argv[1], sys.argv[2]
 for fname in ['USER.md', 'IDENTITY.md']:
-    p = pathlib.Path(f'$TARGET/workspace/{fname}')
+    p = pathlib.Path(f'$TARGET/openclaw_data/workspace/{fname}')
     if p.exists():
         text = p.read_text()
         text = text.replace('{{FULL_NAME}}', full_name).replace('{{NAME}}', name)
@@ -69,8 +69,8 @@ BROKER_KEY=$BROKER_KEY
 # GITLAB_TOKEN=
 EOF
 
-# OpenClaw конфиг
-cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw.json"
+# OpenClaw конфиг — кладём внутрь openclaw_data/ (единственный mount)
+cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw_data/openclaw.json"
 python3 -c "
 import sys, pathlib
 bot_token, tg_id, path = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -78,7 +78,10 @@ p = pathlib.Path(path)
 text = p.read_text()
 text = text.replace('{{BOT_TOKEN}}', bot_token).replace('{{TG_ID}}', tg_id)
 p.write_text(text)
-" "$BOT_TOKEN" "$TG_ID" "$TARGET/openclaw.json"
+" "$BOT_TOKEN" "$TG_ID" "$TARGET/openclaw_data/openclaw.json"
+
+# Выставляем владельца — OpenClaw работает от uid 1000 (node)
+chown -R 1000:1000 "$TARGET/openclaw_data" 2>/dev/null || true
 
 # Добавляем ключи в глобальный .env
 if [ -f ".env" ]; then
@@ -102,8 +105,7 @@ service = f"""
     env_file:
       - instances/{name}/.env
     volumes:
-      - ./instances/{name}/workspace:/home/node/.openclaw/workspace
-      - ./instances/{name}/openclaw.json:/home/node/.openclaw/openclaw.json
+      - ./instances/{name}/openclaw_data:/home/node/.openclaw
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
