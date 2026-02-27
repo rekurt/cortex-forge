@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check
+.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -76,3 +76,24 @@ set-limit:
 	@[ -n "$(NAME)" ] || (echo "❌ NAME= обязателен"; exit 1)
 	@[ -n "$(LIMIT)" ] || (echo "❌ LIMIT= обязателен"; exit 1)
 	@bash scripts/quota.sh set-limit $(NAME) $(LIMIT)
+
+# ── Resource Monitor ────────────────────────────────────────────────────────
+
+monitor: ## Показать текущие метрики ресурсов
+	@bash scripts/monitor.sh metrics
+
+monitor-alerts: ## Показать активные алерты
+	@bash scripts/monitor.sh alerts/active
+
+# ── Service Agent ───────────────────────────────────────────────────────────
+
+# make add-service NAME=svc-kyc PORT=8091 SKILLS=compliance,kyc
+add-service: ## Добавить реплицированный service-инстанс (NAME=x PORT=y SKILLS=z)
+	@[ -n "$(NAME)" ] || (echo "❌ NAME= обязателен"; exit 1)
+	@bash scripts/add-service.sh "$(NAME)" "$(PORT)" "$(SKILLS)"
+
+service-health: ## Проверить health service-инстанса
+	@curl -sf http://localhost:8090/v1/health | python3 -m json.tool
+
+service-skills: ## Показать доступные скиллы service-инстанса
+	@curl -sf -H "Authorization: Bearer $${SERVICE_API_KEY}" http://localhost:8090/v1/skills | python3 -m json.tool

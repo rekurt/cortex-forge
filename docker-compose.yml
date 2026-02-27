@@ -140,17 +140,105 @@ services:
   #     message-broker:
   #       condition: service_healthy
 
+  # ════════════════════════════════════════════════════
+  # RESOURCE MONITOR — метрики контейнеров, диска, квот
+  # Алерты → broker, HTTP API → corp-admin (порт 9091)
+  # ════════════════════════════════════════════════════
+  resource-monitor:
+    build: ./resource-monitor
+    container_name: corp-monitor
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - MONITOR_DB=/data/metrics.db
+      - MONITOR_PORT=9091
+      - MONITOR_INTERVAL=60
+    volumes:
+      - monitor-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - corp-internal
+      - corp-admin
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 128M
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:9091/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ════════════════════════════════════════════════════
+  # SERVICE AGENT — HTTP API для внутренних сервисов
+  # Реплицируемый: make add-service NAME=svc-compliance
+  # Скиллы: compliance (+ другие по мере добавления)
+  # ════════════════════════════════════════════════════
+  assistant-service:
+    build: ./service-agent
+    container_name: corp-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - SERVICE_PORT=8090
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - SKILL_TIMEOUT=150
+      - MAX_CONCURRENT_TASKS=5
+      - DADATA_API_KEY=${DADATA_API_KEY:-}
+      - DADATA_SECRET=${DADATA_SECRET:-}
+    volumes:
+      - service-data:/data
+      - ./service-agent/skills:/app/skills:ro
+      # enrich.py монтируется с хоста — не нужна пересборка образа при обновлении
+      - ${ENRICH_PY_PATH:-./service-agent/skills/compliance/enrich_placeholder.py}:/app/skills/compliance/enrich.py:ro
+    ports:
+      - "127.0.0.1:8090:8090"   # только localhost — nginx/reverse-proxy закроет снаружи
+    networks:
+      - corp-internal
+      - corp-services
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8090/v1/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   quota-data:
     driver: local
+  monitor-data:
+    driver: local
+  service-data:
+    driver: local
 
 networks:
-  # Все инстансы + broker + quota-proxy
+  # Все инстансы + broker + quota-proxy + monitor + service
   corp-internal:
     driver: bridge
     internal: true   # нет доступа к интернету напрямую (через quota-proxy)
 
-  # Только admin + quota-proxy (для управления квотами)
+  # Только admin + quota-proxy + monitor (для управления квотами и метриками)
   corp-admin:
     driver: bridge
     internal: true
+
+  # Для service-agent — backend-сервисы ходят через эту сеть
+  corp-services:
+    driver: bridge
+    # НЕ internal: true — backend сервисы могут ходить через docker network
