@@ -119,21 +119,20 @@ services:
   # Изолированы: нет /infra, нет corp-admin сети
   # ════════════════════════════════════════════════════
 
-  # assistant-nikita:
+  # assistant-<name>:
   #   image: ghcr.io/openclaw/openclaw:latest
-  #   container_name: corp-nikita
+  #   container_name: corp-<name>
   #   restart: unless-stopped
-  #   env_file: instances/nikita/.env
+  #   env_file: instances/<name>/.env
   #   volumes:
-  #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
-  #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+  #     - ./instances/<name>/openclaw_data:/home/node/.openclaw   # единый mount (chown 1000:1000)
   #     - ./shared/skills:/shared/skills:ro
   #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
   #   environment:
-  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}     # квота-ключ, не реальный
-  #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
   #     - BROKER_URL=http://message-broker:8080
-  #     - BROKER_KEY=${BROKER_KEY_NIKITA}
+  #     - BROKER_KEY=${BROKER_KEY_<NAME>}
+  #     - NODE_OPTIONS=--max-old-space-size=1024
   #   networks:
   #     - corp-internal   # broker + quota-proxy, но НЕ corp-admin
   #     - corp-outbound   # Telegram API + внешние вызовы
