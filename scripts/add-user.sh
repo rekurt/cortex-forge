@@ -107,7 +107,7 @@ service = f"""
       - ANTHROPIC_BASE_URL=http://quota-proxy:9090
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
-      - NODE_OPTIONS=--max-old-space-size=768
+      - NODE_OPTIONS=--max-old-space-size=1024
     ports:
       - "127.0.0.1:{ui_port}:18789"   # OpenClaw Control UI
     networks:
@@ -118,8 +118,8 @@ service = f"""
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 512M
+          cpus: "2.0"
+          memory: 1G
     depends_on:
       quota-proxy:
         condition: service_healthy
