@@ -1,0 +1,20 @@
+{
+  "id": "compliance",
+  "name": "Compliance Risk Check",
+  "description": "Проверка контрагента по ИНН (RU/BY/KZ)",
+  "params": {
+    "inn": {
+      "type": "string",
+      "required": true,
+      "description": "ИНН/УНП/БИН организации"
+    },
+    "mode": {
+      "type": "string",
+      "required": false,
+      "default": "full",
+      "enum": ["full", "short"],
+      "description": "Глубина проверки: full — полный отчёт, short — краткая сводка"
+    }
+  },
+  "timeout": 150
+}

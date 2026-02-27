@@ -1,0 +1,27 @@
+# Trivy filesystem scan configuration
+scan:
+  skip-dirs:
+    - .venv
+    - .git
+    - node_modules
+  skip-files:
+    - "*.test.py"
+    - "*.md"
+
+vulnerability:
+  type:
+    - os
+    - library
+  ignore-unfixed: false
+
+secret:
+  config: .github/trivy-secret.yaml
+
+misconfiguration:
+  # Docker, Kubernetes, Terraform misconfigs
+  include-non-failures: false
+
+severity:
+  - CRITICAL
+  - HIGH
+  - MEDIUM    # включаем medium для filesystem scan

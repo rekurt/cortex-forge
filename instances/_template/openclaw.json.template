@@ -1,0 +1,40 @@
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-6"
+      },
+      "workspace": "/home/user/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "{{BOT_TOKEN}}",
+      "allowFrom": [{{TG_ID}}],
+      "dmPolicy": "pairing",
+      "streaming": "off",
+      "actions": {
+        "reactions": true,
+        "sendMessage": true,
+        "deleteMessage": false
+      },
+      "reactionLevel": "minimal"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "${GATEWAY_TOKEN}"
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto"
+  }
+}

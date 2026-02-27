@@ -1,0 +1,29 @@
+# Секреты — никогда в git
+.env
+instances/*/.env
+instances/*/openclaw.json
+**/*.env
+**/*.key
+**/*.token
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/.venv/
+
+# Личная память — опционально исключить
+# instances/*/workspace/memory/
+# instances/*/workspace/MEMORY.md
+
+# Compliance данные
+**/data/cache/
+**/data/snapshots/
+**/data/fns.db
+**/data/watchlist.json
+
+# Архивы
+backups/
+
+# OS
+.DS_Store
+Thumbs.db

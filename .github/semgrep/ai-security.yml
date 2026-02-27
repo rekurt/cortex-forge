@@ -1,0 +1,254 @@
+rules:
+
+  # ── 1. PROMPT INJECTION ────────────────────────────────────────────────────
+  - id: llm-prompt-injection-format
+    patterns:
+      - pattern: |
+          $X = f"...{$USER_INPUT}..."
+      - pattern-either:
+          - pattern-inside: |
+              def $F(..., $USER_INPUT, ...):
+                ...
+          - pattern-inside: |
+              $USER_INPUT = $REQ.get(...)
+              ...
+    message: |
+      Потенциальная prompt injection: пользовательский ввод `$USER_INPUT`
+      вставляется напрямую в f-строку без санитизации.
+      Используй явное экранирование или шаблонизацию с whitelist.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+      cwe: "CWE-77: Improper Neutralization of Special Elements"
+      owasp: "LLM01: Prompt Injection"
+
+  - id: llm-prompt-injection-concat
+    pattern: $PROMPT = $PROMPT + $USER_INPUT
+    message: |
+      Конкатенация пользовательского ввода в промпт.
+      Риск prompt injection — атакующий может изменить инструкции агента.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: ai-security
+      owasp: "LLM01: Prompt Injection"
+
+  # ── 2. API KEY EXPOSURE ────────────────────────────────────────────────────
+  - id: api-key-in-log
+    patterns:
+      - pattern-either:
+          - pattern: print(..., $KEY, ...)
+          - pattern: logging.$LEVEL(..., $KEY, ...)
+      - pattern-either:
+          - pattern-inside: |
+              $KEY = $REQUEST.headers.get("Authorization", ...)
+              ...
+          - pattern-inside: |
+              $KEY = $ENV.get("ANTHROPIC_API_KEY", ...)
+              ...
+          - pattern-inside: |
+              $KEY = $ENV["ANTHROPIC_API_KEY"]
+              ...
+    message: |
+      Возможна утечка API-ключа в логи через `$KEY`.
+      Не логируй токены авторизации — обрезай или маскируй.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+      owasp: "LLM02: Insecure Output Handling"
+
+  - id: api-key-in-response
+    patterns:
+      - pattern: |
+          self._json($STATUS, {..., "key": $KEY, ...})
+      - pattern-inside: |
+          $KEY = $ENV.get("ANTHROPIC_API_KEY", ...)
+          ...
+    message: |
+      API-ключ может попасть в HTTP-ответ.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+
+  # ── 3. INSECURE SUBPROCESS (tool/skill execution) ─────────────────────────
+  - id: subprocess-shell-injection
+    pattern: subprocess.run($CMD, shell=True, ...)
+    message: |
+      `subprocess.run(..., shell=True)` с переменной — риск command injection.
+      Используй список аргументов (`shell=False`) и валидируй ввод.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+      cwe: "CWE-78: OS Command Injection"
+      owasp: "LLM03: Training Data Poisoning / LLM07: Insecure Plugin Design"
+
+  - id: subprocess-user-controlled-args
+    patterns:
+      - pattern: subprocess.run([$CMD, ..., $USER_ARG, ...], ...)
+      - pattern-either:
+          - pattern-inside: |
+              $USER_ARG = $PARAMS.get(...)
+              ...
+          - pattern-inside: |
+              $USER_ARG = $ARGS.get(...)
+              ...
+          - pattern-inside: |
+              $USER_ARG = $BODY.get(...)
+              ...
+    message: |
+      Аргумент subprocess контролируется пользователем (`$USER_ARG`).
+      Проверяй whitelist допустимых значений перед передачей в subprocess.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: ai-security
+      cwe: "CWE-78: OS Command Injection"
+
+  # ── 4. INSECURE DESERIALIZATION OF LLM OUTPUT ─────────────────────────────
+  - id: eval-llm-output
+    patterns:
+      - pattern-either:
+          - pattern: eval($OUTPUT)
+          - pattern: exec($OUTPUT)
+      - pattern-either:
+          - pattern-inside: |
+              $OUTPUT = $PROC.stdout
+              ...
+          - pattern-inside: |
+              $OUTPUT = subprocess.run(...).stdout
+              ...
+    message: |
+      eval()/exec() вывода подпроцесса (возможно LLM) — критическая RCE.
+      Никогда не выполняй вывод LLM как код напрямую.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+      cwe: "CWE-94: Code Injection"
+      owasp: "LLM02: Insecure Output Handling"
+
+  - id: pickle-llm-output
+    patterns:
+      - pattern: pickle.loads($DATA)
+      - pattern-inside: |
+          $DATA = $RESP.read()
+          ...
+    message: |
+      pickle.loads() с внешними данными — RCE.
+      Используй json.loads() для обмена данными.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+
+  # ── 5. PATH TRAVERSAL (agent workspace access) ────────────────────────────
+  - id: path-traversal-instance-name
+    patterns:
+      - pattern: os.path.join($BASE, $NAME, ...)
+      - pattern-either:
+          - pattern-inside: |
+              $NAME = $PARAMS.get(...)
+              ...
+          - pattern-inside: |
+              $NAME = $ARGS.get(...)
+              ...
+    message: |
+      Путь строится из пользовательского ввода `$NAME` без проверки.
+      Риск path traversal (../../../etc/passwd).
+      Проверяй `$NAME` через regex `^[a-z][a-z0-9_-]{1,31}$` перед os.path.join.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+      cwe: "CWE-22: Path Traversal"
+      owasp: "LLM05: Supply Chain Vulnerabilities"
+
+  # ── 6. BROKER TRUST VIOLATION ─────────────────────────────────────────────
+  - id: broker-inbox-without-auth
+    patterns:
+      - pattern: _inbox[$SENDER]
+      - pattern-not-inside: |
+          $SENDER = _auth(...)
+          ...
+      - pattern-not-inside: |
+          if not $SENDER: ...
+    message: |
+      Доступ к чужому inbox без проверки auth.
+      `$SENDER` должен быть получен только из `_auth()`.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+      owasp: "LLM08: Excessive Agency"
+
+  # ── 7. TIMING ATTACK (token comparison) ───────────────────────────────────
+  - id: timing-attack-token-compare
+    patterns:
+      - pattern-either:
+          - pattern: $TOKEN == $SECRET
+          - pattern: $SECRET == $TOKEN
+      - pattern-either:
+          - pattern-inside: |
+              $TOKEN = $HEADERS.get("Authorization", ...)
+              ...
+          - pattern-inside: |
+              $TOKEN = $REQ.headers.get(...)
+              ...
+    message: |
+      Сравнение токенов через `==` уязвимо к timing attack.
+      Используй `hmac.compare_digest(a.encode(), b.encode())`.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: ai-security
+      cwe: "CWE-208: Observable Timing Discrepancy"
+
+  # ── 8. QUOTA BYPASS ───────────────────────────────────────────────────────
+  - id: quota-check-after-request
+    patterns:
+      - pattern: |
+          urlopen(...)
+          ...
+          _check_quota(...)
+    message: |
+      Проверка квоты ПОСЛЕ запроса к upstream позволяет обойти лимит.
+      Quota check должен быть ДО форвардинга запроса к Anthropic.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: ai-security
+      owasp: "LLM09: Overreliance"
+
+  # ── 9. MCP TOOL INJECTION ─────────────────────────────────────────────────
+  - id: mcp-tool-name-injection
+    patterns:
+      - pattern: TOOL_HANDLERS[$TOOL_NAME](...)
+      - pattern-not-inside: |
+          if $TOOL_NAME not in TOOL_HANDLERS: ...
+    message: |
+      MCP tool name `$TOOL_NAME` используется без проверки existence.
+      Добавь explicit check `if name not in TOOL_HANDLERS: return error`.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: ai-security
+      owasp: "LLM07: Insecure Plugin Design"
+
+  # ── 10. HARDCODED CREDENTIALS ─────────────────────────────────────────────
+  - id: hardcoded-api-key-pattern
+    patterns:
+      - pattern-either:
+          - pattern: $X = "sk-ant-..."
+          - pattern: $X = "glpat-..."
+          - pattern: $X = "ghp_..."
+    message: |
+      Возможно захардкоженный API-ключ в коде.
+      Используй переменные окружения.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      cwe: "CWE-798: Use of Hard-coded Credentials"

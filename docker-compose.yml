@@ -1,0 +1,253 @@
+services:
+
+  # ════════════════════════════════════════════════════
+  # QUOTA PROXY — единственное место с реальным API-ключом
+  # Hardened: нет проброса портов наружу, resource limits
+  # ════════════════════════════════════════════════════
+  quota-proxy:
+    build: ./quota-proxy
+    container_name: corp-quota
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - QUOTA_DB=/data/quota.db
+      - QUOTA_PORT=9090
+    volumes:
+      - quota-data:/data
+    # ⚠️ Порт НЕ пробрасывается наружу — только внутри corp-internal
+    # Управление квотами — только через admin-контейнер
+    # corp-egress нужен для форвардинга запросов в api.anthropic.com
+    networks:
+      - corp-internal
+      - corp-admin
+      - corp-egress
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ════════════════════════════════════════════════════
+  # MESSAGE BROKER — шина сообщений (только corp-internal)
+  # ════════════════════════════════════════════════════
+  message-broker:
+    build: ./broker
+    container_name: corp-broker
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - BROKER_PORT=8080
+    networks:
+      - corp-internal
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+
+  # ════════════════════════════════════════════════════
+  # ADMIN — управляет инфрой, видит только нужные папки
+  # НЕ монтирует .env (не видит ANTHROPIC_API_KEY)
+  # Подключён к corp-admin (для quota API) + corp-internal (для broker)
+  # ════════════════════════════════════════════════════
+  assistant-admin:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-admin
+    restart: unless-stopped
+    env_file: instances/admin/.env
+    volumes:
+      - ./instances/admin/workspace:/home/user/.openclaw/workspace
+      - ./instances/admin/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+      - ./shared/skills:/shared/skills:ro
+      # Монтируем только то, что нужно для управления — НЕ .env с ключами
+      - ./instances:/infra/instances         # воркспейсы инстансов
+      - ./scripts:/infra/scripts:ro          # скрипты управления (read-only)
+      - ./shared:/infra/shared:ro            # shared skills
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # статус контейнеров (read-only)
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_ADMIN}
+      - QUOTA_PROXY_URL=http://quota-proxy:9090
+      - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+    networks:
+      - corp-internal
+      - corp-admin
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+
+  # ════════════════════════════════════════════════════
+  # ПЕРСОНАЛЬНЫЕ ИНСТАНСЫ
+  # Шаблон — добавляется через: make add-user NAME=x BOT_TOKEN=y TG_ID=z
+  # Изолированы: нет /infra, нет corp-admin сети
+  # ════════════════════════════════════════════════════
+
+  # assistant-nikita:
+  #   image: ghcr.io/openclaw/openclaw:latest
+  #   container_name: corp-nikita
+  #   restart: unless-stopped
+  #   env_file: instances/nikita/.env
+  #   volumes:
+  #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
+  #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+  #     - ./shared/skills:/shared/skills:ro
+  #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
+  #   environment:
+  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}     # квота-ключ, не реальный
+  #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+  #     - BROKER_URL=http://message-broker:8080
+  #     - BROKER_KEY=${BROKER_KEY_NIKITA}
+  #   networks:
+  #     - corp-internal   # broker + quota-proxy, но НЕ corp-admin
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "1.0"
+  #         memory: 512M
+  #   depends_on:
+  #     quota-proxy:
+  #       condition: service_healthy
+  #     message-broker:
+  #       condition: service_healthy
+
+  # ════════════════════════════════════════════════════
+  # RESOURCE MONITOR — метрики контейнеров, диска, квот
+  # Алерты → broker, HTTP API → corp-admin (порт 9091)
+  # ════════════════════════════════════════════════════
+  resource-monitor:
+    build: ./resource-monitor
+    container_name: corp-monitor
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - MONITOR_DB=/data/metrics.db
+      - MONITOR_PORT=9091
+      - MONITOR_INTERVAL=60
+    volumes:
+      - monitor-data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - corp-internal
+      - corp-admin
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 128M
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:9091/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ════════════════════════════════════════════════════
+  # SERVICE AGENT — HTTP API для внутренних сервисов
+  # Реплицируемый: make add-service NAME=svc-compliance
+  # Скиллы: compliance (+ другие по мере добавления)
+  # ════════════════════════════════════════════════════
+  assistant-service:
+    build: ./service-agent
+    container_name: corp-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - SERVICE_PORT=8090
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
+      - SKILL_TIMEOUT=150
+      - MAX_CONCURRENT_TASKS=5
+      - DADATA_API_KEY=${DADATA_API_KEY:-}
+      - DADATA_SECRET=${DADATA_SECRET:-}
+    volumes:
+      - service-data:/data
+      - ./service-agent/skills:/app/skills:ro
+      # enrich.py монтируется с хоста — не нужна пересборка образа при обновлении
+      - ${ENRICH_PY_PATH:-./service-agent/skills/compliance/enrich_placeholder.py}:/app/skills/compliance/enrich.py:ro
+    ports:
+      - "127.0.0.1:8090:8090"   # только localhost — nginx/reverse-proxy закроет снаружи
+    networks:
+      - corp-internal
+      - corp-services
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8090/v1/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  quota-data:
+    driver: local
+  monitor-data:
+    driver: local
+  service-data:
+    driver: local
+
+networks:
+  # Все инстансы + broker + quota-proxy + monitor + service
+  corp-internal:
+    driver: bridge
+    internal: true   # нет доступа к интернету напрямую (через quota-proxy)
+
+  # Только admin + quota-proxy + monitor (для управления квотами и метриками)
+  corp-admin:
+    driver: bridge
+    internal: true
+
+  # Для service-agent — backend-сервисы ходят через эту сеть
+  corp-services:
+    driver: bridge
+    # НЕ internal: true — backend сервисы могут ходить через docker network
+
+  # Egress-only сеть для quota-proxy: только этот контейнер имеет выход в интернет.
+  # Все остальные сети — internal: true, что гарантирует что инстансы не ходят
+  # напрямую в api.anthropic.com — только через quota-proxy.
+  corp-egress:
+    driver: bridge
+    # Нет internal: true — quota-proxy форвардит запросы в api.anthropic.com
