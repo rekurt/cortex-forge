@@ -1,0 +1,14 @@
+# CODEOWNERS — требуют review при изменении критичных файлов
+* @example-maintainer
+
+# Безопасность и auth
+quota-proxy/proxy.py          @example-maintainer
+broker/broker.py              @example-maintainer
+mcp-server/server.py          @example-maintainer
+.github/workflows/security.yml @example-maintainer
+.github/semgrep/               @example-maintainer
+
+# Инфраструктура
+docker-compose.yml            @example-maintainer
+scripts/add-user.sh           @example-maintainer
+scripts/remove-user.sh        @example-maintainer

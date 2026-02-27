@@ -1,0 +1,207 @@
+name: Security
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+
+  secrets-scan:
+    name: 🔑 Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Semgrep secrets
+        run: |
+          pip install semgrep --quiet
+          semgrep --config=p/secrets --error --quiet . || true
+
+  sast-python:
+    name: 🐍 SAST Python
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bandit
+        run: |
+          pip install bandit --quiet
+          bandit -r . --exclude ./.venv,./engine -ll -f json -o bandit-results.json || true
+          # Convert to readable summary
+          python3 -c "
+          import json, sys, pathlib
+          p = pathlib.Path('bandit-results.json')
+          if not p.exists(): print('Bandit: no results file'); sys.exit(0)
+          d = json.loads(p.read_text())
+          issues = d.get('results', [])
+          highs = [i for i in issues if i['issue_severity'] in ('HIGH','MEDIUM')]
+          print(f'Bandit: {len(issues)} total, {len(highs)} medium/high')
+          for i in highs[:10]:
+            print(f\"  [{i['issue_severity']}] {i['issue_text']} — {i['filename']}:{i['line_number']}\")
+          "
+      - name: Upload Bandit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-results
+          path: bandit-results.json
+          if-no-files-found: ignore
+      - name: Semgrep SAST
+        run: |
+          pip install semgrep --quiet
+          semgrep --config=p/python --config=p/owasp-top-ten \
+            --exclude='.venv,engine' \
+            --error --quiet . || true
+
+  ai-security:
+    name: 🤖 AI Security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Semgrep AI rules
+        run: |
+          pip install semgrep --quiet
+          semgrep --config=.github/semgrep/ai-security.yml \
+            --exclude='.venv,engine' \
+            --error --quiet . || true
+      - name: Custom AI Security Checker
+        run: python3 .github/scripts/ai_security_check.py
+
+  docker-lint:
+    name: 🐳 Docker Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          recursive: true
+          format: json
+          output-file: hadolint-results.json
+          no-fail: true
+          failure-threshold: error
+      - name: Upload Hadolint results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hadolint-results
+          path: hadolint-results.json
+          if-no-files-found: ignore
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH
+          skip-dirs: ".venv,engine"
+
+  shellcheck:
+    name: 🐚 ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          severity: error
+          scandir: scripts
+        env:
+          SHELLCHECK_OPTS: "--exclude=SC2086,SC2034,SC1091"
+
+  deps-audit:
+    name: 📦 Dependencies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: pip-audit
+        run: |
+          pip install pip-audit --quiet
+          find . -name "requirements*.txt" -not -path "./.venv/*" -not -path "./engine/*" | \
+            xargs -I{} sh -c 'echo "=== {} ===" && pip-audit -r {} || true'
+
+  trivy-images:
+    name: 🐋 Image Scan (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [broker, quota-proxy, service-agent, resource-monitor]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build ${{ matrix.service }}
+        run: docker build -t corp-${{ matrix.service }}:scan ./${{ matrix.service }}
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: corp-${{ matrix.service }}:scan
+          format: table
+          exit-code: "0"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  security-summary:
+    name: 📋 Security Summary
+    runs-on: ubuntu-latest
+    needs: [secrets-scan, sast-python, ai-security, docker-lint, shellcheck, deps-audit]
+    if: always() && github.event_name == 'pull_request'
+    steps:
+      - name: Post PR Summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const jobs = {
+              '🔑 Secrets':       '${{ needs.secrets-scan.result }}',
+              '🐍 SAST Python':   '${{ needs.sast-python.result }}',
+              '🤖 AI Security':   '${{ needs.ai-security.result }}',
+              '🐳 Docker':        '${{ needs.docker-lint.result }}',
+              '🐚 ShellCheck':    '${{ needs.shellcheck.result }}',
+              '📦 Dependencies':  '${{ needs.deps-audit.result }}',
+            };
+            const icon = r => r==='success'?'✅':r==='skipped'?'⏭️':r==='failure'?'❌':'⚠️';
+            const allOk = Object.values(jobs).every(r => r==='success'||r==='skipped');
+            const rows = Object.entries(jobs).map(([n,r])=>`| ${n} | ${icon(r)} ${r} |`).join('\n');
+            const body = [
+              `## ${allOk?'✅':'❌'} Security Check Results`,
+              '', '| Check | Result |', '|---|---|', rows, '',
+              allOk ? '**Все проверки пройдены.**' : '**Есть ошибки — смотри детали выше.**',
+            ].join('\n');
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner, repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const prev = comments.data.find(c =>
+              c.user.login==='github-actions[bot]' && c.body.includes('Security Check Results')
+            );
+            if (prev) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                comment_id: prev.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.issue.number, body,
+              });
+            }

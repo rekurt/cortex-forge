@@ -1,0 +1,60 @@
+name: 🚀 Feature Request
+description: Suggest an idea or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea? Great! Please describe the problem you want to solve,
+        not just the solution — it helps find the best approach together.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Motivation
+      description: What problem does this solve? Who is affected?
+      placeholder: |
+        As a team admin, I need to see per-instance usage in a web dashboard
+        instead of running `make quota-report` from the terminal.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How would you like it to work?
+      placeholder: |
+        Add a simple web UI served by quota-proxy at /dashboard (Bearer auth).
+        Show a table with instance name, used/limit tokens, last activity.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      placeholder: |
+        - Grafana dashboard — too heavy for this use case
+        - Telegram bot command — already exists via `make quota-report`, but needs terminal access
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority (your perspective)
+      options:
+        - "🔴 High — blocking my use case"
+        - "🟡 Medium — would significantly improve experience"
+        - "🔵 Low — nice to have"
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this hasn't been requested before
+          required: true
+        - label: I'm willing to help implement this (optional)
+          required: false

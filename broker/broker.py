@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""
+corp-assistant / message broker  [hardened]
+
+Hardening:
+  - Constant-time key comparison
+  - Rate limiting: 10 сообщений/мин на инстанс
+  - Max message size: 10KB
+  - Security headers
+  - Message size limit in inbox
+"""
+
+import json, os, signal, time, hashlib, hmac, threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from collections import defaultdict, deque
+from urllib.parse import urlparse
+
+MAX_MSG_BYTES = 10 * 1024   # 10KB на сообщение
+MAX_INBOX     = 100
+MAX_AGE_SEC   = 86400
+
+_lock   = threading.Lock()
+_inbox  = defaultdict(deque)
+_keys: dict[str, str] = {}   # {sha256(key): instance_name}
+
+def _load_keys():
+    keys = {}
+    for k, v in os.environ.items():
+        if k.startswith("BROKER_KEY_") and v:
+            name = k[len("BROKER_KEY_"):].lower()
+            keys[hashlib.sha256(v.strip().encode()).hexdigest()] = name
+    return keys
+
+_keys = _load_keys()
+
+# ── Rate limiter ────────────────────────────────────────────────────────────
+class RateLimiter:
+    def __init__(self, rate: float, capacity: int):
+        self.rate, self.capacity = rate, capacity
+        self._b: dict[str, tuple[float, float]] = {}
+        self._l = threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        with self._l:
+            tokens, last = self._b.get(key, (self.capacity, now))
+            tokens = min(self.capacity, tokens + (now - last) * self.rate)
+            if tokens < 1:
+                self._b[key] = (tokens, now); return False
+            self._b[key] = (tokens - 1, now); return True
+
+_send_rl = RateLimiter(rate=10/60, capacity=10)  # 10 сообщений в минуту
+
+# Constant-time auth
+def _auth(req) -> str | None:
+    auth = req.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "): return None
+    h = hashlib.sha256(auth[7:].encode()).hexdigest()
+    result = None
+    for k, name in _keys.items():
+        if hmac.compare_digest(h, k):
+            result = name
+    return result
+
+def _cleanup():
+    cutoff = time.time() - MAX_AGE_SEC
+    with _lock:
+        for q in _inbox.values():
+            while q and q[0]["ts"] < cutoff:
+                q.popleft()
+
+_SEC_HEADERS = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+
+class Handler(BaseHTTPRequestHandler):
+
+    def log_message(self, fmt, *args):
+        print(f"[broker] {self.address_string()} {fmt % args}", flush=True)
+
+    def _json(self, code, body):
+        data = json.dumps(body, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", len(data))
+        for k, v in _SEC_HEADERS.items(): self.send_header(k, v)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+
+        if path == "/health":
+            self._json(200, {"status": "ok", "instances": sorted(set(_keys.values()))})
+            return
+
+        if path == "/inbox":
+            sender = _auth(self)
+            if not sender:
+                self._json(403, {"error": "Unauthorized"}); return
+            _cleanup()
+            with _lock:
+                msgs = list(_inbox[sender])
+            self._json(200, {"inbox": msgs, "count": len(msgs)})
+            return
+
+        self._json(404, {"error": "Not found"})
+
+    def do_POST(self):
+        if urlparse(self.path).path != "/send":
+            self._json(404, {"error": "Not found"}); return
+
+        sender = _auth(self)
+        if not sender:
+            self._json(403, {"error": "Unauthorized"}); return
+
+        # Rate limit
+        if not _send_rl.allow(sender):
+            self._json(429, {"error": "Rate limit exceeded (10 msg/min)"}); return
+
+        length = int(self.headers.get("Content-Length", 0))
+        if length > MAX_MSG_BYTES:
+            self._json(413, {"error": f"Message too large (max {MAX_MSG_BYTES//1024}KB)"}); return
+
+        try:
+            body    = json.loads(self.rfile.read(length))
+            to      = str(body.get("to", "")).lower().strip()
+            message = str(body.get("message", "")).strip()
+        except Exception:
+            self._json(400, {"error": "Invalid JSON"}); return
+
+        if not to or not message:
+            self._json(400, {"error": "Missing 'to' or 'message'"}); return
+
+        known = set(_keys.values())
+        if to not in known:
+            self._json(404, {"error": f"Unknown recipient: {to}"}); return
+        if to == sender:
+            self._json(400, {"error": "Cannot send to yourself"}); return
+
+        msg = {"from": sender, "to": to, "message": message[:MAX_MSG_BYTES], "ts": time.time()}
+        with _lock:
+            q = _inbox[to]
+            if len(q) >= MAX_INBOX: q.popleft()
+            q.append(msg)
+
+        print(f"[broker] {sender} → {to}: {message[:60]}", flush=True)
+        self._json(200, {"ok": True, "from": sender, "to": to})
+
+    def do_DELETE(self):
+        if urlparse(self.path).path != "/inbox":
+            self._json(404, {"error": "Not found"}); return
+
+        sender = _auth(self)
+        if not sender:
+            self._json(403, {"error": "Unauthorized"}); return
+
+        with _lock:
+            count = len(_inbox[sender])
+            _inbox[sender].clear()
+
+        print(f"[broker] {sender} очистил inbox ({count} сообщений)", flush=True)
+        self._json(200, {"ok": True, "deleted": count})
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("BROKER_PORT", 8080))
+    if not _keys:
+        print("⚠️  Нет API-ключей!", flush=True)
+    else:
+        print(f"✅ Broker hardened :{port} | instances: {sorted(set(_keys.values()))}", flush=True)
+
+    server = HTTPServer(("0.0.0.0", port), Handler)
+
+    def _shutdown(signum, frame):
+        print(f"[broker] Получен сигнал {signum}, завершаем...", flush=True)
+        threading.Thread(target=server.shutdown).start()
+
+    signal.signal(signal.SIGTERM, _shutdown)
+    signal.signal(signal.SIGINT, _shutdown)
+
+    server.serve_forever()

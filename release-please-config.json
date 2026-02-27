@@ -1,0 +1,19 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "simple",
+  "bump-minor-pre-major": true,
+  "changelog-sections": [
+    {"type": "feat",     "section": "✨ Новые функции"},
+    {"type": "fix",      "section": "🐛 Исправления"},
+    {"type": "security", "section": "🔒 Безопасность"},
+    {"type": "perf",     "section": "⚡ Производительность"},
+    {"type": "docs",     "section": "📚 Документация"},
+    {"type": "ci",       "section": "⚙️ CI/CD"},
+    {"type": "chore",    "section": "🧹 Прочее", "hidden": true}
+  ],
+  "packages": {
+    ".": {
+      "release-type": "simple"
+    }
+  }
+}

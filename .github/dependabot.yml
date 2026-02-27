@@ -1,0 +1,35 @@
+version: 2
+updates:
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Moscow
+    labels:
+      - dependencies
+      - security
+    commit-message:
+      prefix: "ci"
+
+  # Docker base images
+  - package-ecosystem: docker
+    directories:
+      - /broker
+      - /quota-proxy
+      - /service-agent
+      - /resource-monitor
+      - /mcp-server
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Moscow
+    labels:
+      - dependencies
+      - docker
+      - security
+    commit-message:
+      prefix: "deps(docker)"

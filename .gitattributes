@@ -1,0 +1,27 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Source
+*.py    text eol=lf
+*.sh    text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.txt   text eol=lf
+
+# Don't mess with binary files
+*.jpg   binary
+*.jpeg  binary
+*.png   binary
+*.gif   binary
+*.ico   binary
+*.db    binary
+*.sqlite binary
+
+# Don't count generated / template files as code
+instances/_template/**  linguist-documentation
+instances/admin/**      linguist-documentation
+docs/**                 linguist-documentation
+assets/**               linguist-vendored

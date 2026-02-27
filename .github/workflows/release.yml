@@ -1,0 +1,238 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"           # v1.2.3
+      - "v[0-9]+.[0-9]+.[0-9]+-*"          # v1.2.3-rc.1
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write      # для SBOM / cosign
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/corp-assistant
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # 1. Парсим версию из тега
+  # ═══════════════════════════════════════════════════════════
+  version:
+    name: 🔖 Parse Version
+    runs-on: ubuntu-latest
+    outputs:
+      version:    ${{ steps.parse.outputs.version }}
+      is_prerelease: ${{ steps.parse.outputs.is_prerelease }}
+      major:      ${{ steps.parse.outputs.major }}
+      minor:      ${{ steps.parse.outputs.minor }}
+    steps:
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION"   >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"           >> "$GITHUB_OUTPUT"
+          MAJOR=$(echo "$VERSION" | cut -d. -f1)
+          MINOR=$(echo "$VERSION" | cut -d. -f2)
+          echo "major=$MAJOR"       >> "$GITHUB_OUTPUT"
+          echo "minor=$MINOR"       >> "$GITHUB_OUTPUT"
+          # Pre-release если содержит - (rc, alpha, beta)
+          if [[ "$VERSION" == *"-"* ]]; then
+            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Релиз: $VERSION (pre-release: $([[ "$VERSION" == *"-"* ]] && echo true || echo false))"
+
+  # ═══════════════════════════════════════════════════════════
+  # 2. Запускаем security checks перед релизом
+  # ═══════════════════════════════════════════════════════════
+  pre-release-security:
+    name: 🔒 Pre-release Security
+    runs-on: ubuntu-latest
+    needs: version
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bandit (quick pass)
+        run: |
+          pip install bandit --quiet
+          bandit -r . --exclude ./.venv -ll -q || true
+
+      - name: Custom AI security check
+        run: python3 .github/scripts/ai_security_check.py
+
+      - name: Gitleaks on tag
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════
+  # 3. Собираем Docker-образы и тегируем версией
+  # ═══════════════════════════════════════════════════════════
+  build-images:
+    name: 🐳 Build & Tag Images
+    runs-on: ubuntu-latest
+    needs: [version, pre-release-security]
+    strategy:
+      matrix:
+        service: [broker, quota-proxy, service-agent, resource-monitor]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta (tags)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest,enable=${{ needs.version.outputs.is_prerelease == 'false' }}
+            type=sha,prefix=sha-,format=short
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v5
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Generate SBOM (SPDX)
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ needs.version.outputs.version }}
+          format: spdx-json
+          output-file: sbom-${{ matrix.service }}.spdx.json
+          upload-artifact: true
+          artifact-name: sbom-${{ matrix.service }}-${{ needs.version.outputs.version }}
+
+  # ═══════════════════════════════════════════════════════════
+  # 4. Генерируем changelog и создаём GitHub Release
+  # ═══════════════════════════════════════════════════════════
+  create-release:
+    name: 🚀 Create Release
+    runs-on: ubuntu-latest
+    needs: [version, build-images]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get previous tag
+        id: prev_tag
+        run: |
+          PREV=$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sed -n '2p')
+          echo "prev_tag=${PREV:-}" >> "$GITHUB_OUTPUT"
+          echo "Предыдущий тег: ${PREV:-'первый релиз'}"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="${{ needs.version.outputs.version }}"
+          PREV="${{ steps.prev_tag.outputs.prev_tag }}"
+          TAG="v${VERSION}"
+          
+          {
+            echo "## 🐒 corp-assistant v${VERSION}"
+            echo ""
+            echo "### 🐳 Docker образы"
+            for svc in broker quota-proxy service-agent resource-monitor; do
+              echo "- \`${{ env.IMAGE_PREFIX }}-${svc}:${VERSION}\`"
+            done
+            echo ""
+            
+            if [ -n "$PREV" ]; then
+              echo "### 📝 Изменения с ${PREV}"
+              echo ""
+              
+              FEATS=$(git log "${PREV}..${TAG}" --oneline --no-merges \
+                --grep="^feat" --pretty="format:- %s" | head -20)
+              FIXES=$(git log "${PREV}..${TAG}" --oneline --no-merges \
+                --grep="^fix" --pretty="format:- %s" | head -20)
+              SEC=$(git log "${PREV}..${TAG}" --oneline --no-merges \
+                --grep="^security\|^sec" --pretty="format:- %s" | head -10)
+              BREAKS=$(git log "${PREV}..${TAG}" --oneline --no-merges \
+                --grep="BREAKING CHANGE\|!:" --pretty="format:- %s" | head -10)
+              
+              [ -n "$BREAKS" ] && echo "#### ⚠️ Breaking Changes" && echo "$BREAKS" && echo ""
+              [ -n "$FEATS"  ] && echo "#### ✨ Новые функции"   && echo "$FEATS"  && echo ""
+              [ -n "$FIXES"  ] && echo "#### 🐛 Исправления"    && echo "$FIXES"  && echo ""
+              [ -n "$SEC"    ] && echo "#### 🔒 Безопасность"   && echo "$SEC"    && echo ""
+              
+              echo "#### 📊 Статистика"
+              COMMITS=$(git log "${PREV}..${TAG}" --oneline --no-merges | wc -l | tr -d ' ')
+              AUTHORS=$(git log "${PREV}..${TAG}" --no-merges --format='%an' | sort -u | wc -l | tr -d ' ')
+              echo "- Коммитов: ${COMMITS}"
+              echo "- Авторов: ${AUTHORS}"
+              echo ""
+              
+              echo "**Полный список:** [\`${PREV}..${TAG}\`](https://github.com/${{ github.repository }}/compare/${PREV}...${TAG})"
+            else
+              echo "### 🎉 Первый релиз"
+              git log --oneline --no-merges | head -20 | sed 's/^/- /'
+            fi
+            
+            echo ""
+            echo "---"
+            echo "_Собрано автоматически · [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/master/CHANGELOG.md)_"
+          } > release-notes.md
+          
+          cat release-notes.md
+          echo "notes_file=release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Download SBOMs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: sbom-*-${{ needs.version.outputs.version }}
+          merge-multiple: true
+          path: sboms/
+        continue-on-error: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name:       "v${{ needs.version.outputs.version }}"
+          body_path:  release-notes.md
+          prerelease: ${{ needs.version.outputs.is_prerelease == 'true' }}
+          draft:      false
+          files: |
+            sboms/*.spdx.json
+          generate_release_notes: false
+          make_latest: "${{ !contains(github.ref_name, '-') }}"
+
+      - name: Tag major + minor aliases
+        if: ${{ !contains(github.ref_name, '-') }}
+        run: |
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "github-actions[bot]"
+          
+          MAJOR="v${{ needs.version.outputs.major }}"
+          MINOR="v${{ needs.version.outputs.major }}.${{ needs.version.outputs.minor }}"
+          
+          # Плавающие теги (как у actions: v1, v1.2)
+          git tag -fa "$MAJOR" -m "Release $MAJOR → v${{ needs.version.outputs.version }}"
+          git tag -fa "$MINOR" -m "Release $MINOR → v${{ needs.version.outputs.version }}"
+          git push origin "$MAJOR" "$MINOR" --force
+          echo "Обновлены плавающие теги: $MAJOR, $MINOR"
