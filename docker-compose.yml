@@ -71,18 +71,20 @@ services:
   # Подключён к corp-admin (для quota API) + corp-internal (для broker)
   # ════════════════════════════════════════════════════
   assistant-admin:
-    image: ghcr.io/openclaw/openclaw:latest
+    build:
+      context: .
+      dockerfile: instances/admin/Dockerfile
+    image: cortex-forge-admin:latest
     container_name: corp-admin
     restart: unless-stopped
     env_file: instances/admin/.env
+    group_add:
+      - "988"   # docker group на хосте — доступ к /var/run/docker.sock
     volumes:
       - ./instances/admin/openclaw_data:/home/node/.openclaw
       - ./shared/skills:/shared/skills:ro
-      # Монтируем только то, что нужно для управления — НЕ .env с ключами
-      - ./instances:/infra/instances         # воркспейсы инстансов
-      - ./scripts:/infra/scripts:ro          # скрипты управления (read-only)
-      - ./shared:/infra/shared:ro            # shared skills
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # статус контейнеров (read-only)
+      - ./:/infra                            # весь проект — для add-user.sh и make deploy
+      - /var/run/docker.sock:/var/run/docker.sock  # docker CLI для управления инстансами
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
       - BROKER_URL=http://message-broker:8080
@@ -90,6 +92,8 @@ services:
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
       - NODE_OPTIONS=--max-old-space-size=1536
+      - COMPOSE_PROJECT_NAME=cortex-forge
+      - INFRA_DIR=/infra
     ports:
       - "127.0.0.1:18789:18789"   # OpenClaw Control UI — http://localhost:18789
     networks:
