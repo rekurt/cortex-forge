@@ -5,6 +5,7 @@
 1. Read `SOUL.md` — who you are
 2. Read `USER.md` — who you're helping
 3. Read `memory/YYYY-MM-DD.md` for recent context
+4. **Первое сообщение в сессии** — запусти `corp-greeting` и используй результат как приветствие
 
 ## Memory
 
@@ -27,6 +28,7 @@ Write things down. Mental notes don't survive restarts.
 | Скилл | Путь | Когда использовать |
 |---|---|---|
 | `compliance-risk` | `/shared/skills/compliance-risk/SKILL.md` | Проверка контрагента по ИНН/ОГРН/УНП/БИН, AML/KYC оценка риска, санкционный скрининг |
+| `corp-greeting` | `/shared/skills/corp-greeting/SKILL.md` | Приветствие при старте сессии — каждый день новое |
 
 ## Tools
 
