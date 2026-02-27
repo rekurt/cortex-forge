@@ -46,9 +46,8 @@ quota-reset:
 	@[ -n "$(NAME)" ] || (echo "❌ NAME= обязателен"; exit 1)
 	@bash scripts/quota.sh reset $(NAME)
 
-# Установить лимит: make set-limit NAME=alexey LIMIT=500000
+# Установить лимит БЕЗ рестарта: make set-limit NAME=alexey LIMIT=500000
 set-limit:
 	@[ -n "$(NAME)" ] || (echo "❌ NAME= обязателен"; exit 1)
 	@[ -n "$(LIMIT)" ] || (echo "❌ LIMIT= обязателен"; exit 1)
 	@bash scripts/quota.sh set-limit $(NAME) $(LIMIT)
-	@docker compose restart quota-proxy

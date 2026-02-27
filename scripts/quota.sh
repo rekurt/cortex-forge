@@ -1,65 +1,83 @@
 #!/usr/bin/env bash
-# quota.sh — управление квотами токенов
+# quota.sh — управление квотами токенов через API (без рестарта)
 # Использование:
-#   bash scripts/quota.sh report              — отчёт по всем за текущий месяц
-#   bash scripts/quota.sh report 2026-03      — за конкретный месяц
-#   bash scripts/quota.sh reset nikita        — сбросить счётчик Никиты
-#   bash scripts/quota.sh set-limit nikita 500000  — установить лимит
+#   bash scripts/quota.sh report [YYYY-MM]
+#   bash scripts/quota.sh set-limit <name> <tokens>
+#   bash scripts/quota.sh reset <name> [YYYY-MM]
 
 set -e
-source .env 2>/dev/null || true
-PROXY_URL="${QUOTA_PROXY_URL:-http://localhost:9090}"
+[ -f .env ] && source .env 2>/dev/null || true
+PROXY_URL="${QUOTA_PROXY_URL:-http://quota-proxy:9090}"
 ADMIN_TOKEN="${QUOTA_ADMIN_TOKEN:-changeme}"
+AUTH="-H \"Authorization: Bearer $ADMIN_TOKEN\""
 
 CMD="$1"
+
+_curl() {
+    curl -sf "$@" -H "Authorization: Bearer $ADMIN_TOKEN"
+}
 
 case "$CMD" in
   report)
     MONTH="${2:-}"
     URL="$PROXY_URL/quota/report"
     [ -n "$MONTH" ] && URL="$URL?month=$MONTH"
-    echo "📊 Отчёт по токенам$([ -n "$MONTH" ] && echo " ($MONTH)" || echo " (текущий месяц)"):"
-    curl -sf "$URL" -H "Authorization: Bearer $ADMIN_TOKEN" | \
-      python3 -c "
+    _curl "$URL" | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
-print(f\"  Месяц: {d['month']}\")
+print(f\"  📊 Квоты токенов — {d['month']}\")
 print()
 for u in d['usage']:
-    bar = '█' * int((u.get('used_pct') or 0) / 5)
-    print(f\"  {u['instance']:<12} {u['total_tokens']:>8,} / {str(u['limit']):>9} токенов  {u['status']}  {bar}\")
+    pct  = u.get('used_pct') or 0
+    bar  = '█' * min(int(pct / 5), 20)
+    lim  = str(u['limit'])
+    print(f\"  {u['instance']:<12} {u['total_tokens']:>9,} / {lim:>9} {u['status']}\")
+    print(f\"               {bar}\")
     print(f\"               in={u['input_tokens']:,}  out={u['output_tokens']:,}  reqs={u['requests']}\")
 print()
+lims = d.get('limits', {})
+if lims:
+    print('  Лимиты:')
+    for name, info in sorted(lims.items()):
+        print(f\"    {name:<12} {info['limit']:,}  (изменил: {info['updated_by']}, {info['updated_at']})\")
 "
-    ;;
-
-  reset)
-    INSTANCE="$2"
-    [ -z "$INSTANCE" ] && echo "❌ Укажи имя: quota.sh reset <name>" && exit 1
-    curl -sf "$PROXY_URL/quota/reset?instance=$INSTANCE" \
-      -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool
-    echo "✅ Счётчик $INSTANCE сброшен"
     ;;
 
   set-limit)
     INSTANCE="$2"
     LIMIT="$3"
     [ -z "$INSTANCE" ] || [ -z "$LIMIT" ] && echo "❌ Использование: quota.sh set-limit <name> <tokens>" && exit 1
-    NAME_UPPER=$(echo "$INSTANCE" | tr '[:lower:]' '[:upper:]')
-    # Обновляем в .env
-    if grep -q "QUOTA_LIMIT_${NAME_UPPER}" .env 2>/dev/null; then
-      sed -i "s/^QUOTA_LIMIT_${NAME_UPPER}=.*/QUOTA_LIMIT_${NAME_UPPER}=$LIMIT/" .env
-    else
-      echo "QUOTA_LIMIT_${NAME_UPPER}=$LIMIT" >> .env
-    fi
-    echo "✅ Лимит для $INSTANCE установлен: $LIMIT токенов/мес"
-    echo "💡 Примени: make restart NAME=quota-proxy  (или make deploy)"
+    RESP=$(_curl -X POST "$PROXY_URL/quota/set-limit" \
+        -H "Content-Type: application/json" \
+        -d "{\"instance\":\"$INSTANCE\",\"limit\":$LIMIT}")
+    echo "$RESP" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+if d.get('ok'):
+    print(f\"  ✅ Лимит {d['instance']}: {d['limit']:,} токенов/мес\")
+    print(f\"     Текущий расход: {d['current_usage']:,}  {d['status']}\")
+else:
+    print(f\"  ❌ {d.get('error')}\")
+"
+    ;;
+
+  reset)
+    INSTANCE="$2"
+    MONTH="${3:-$(date +%Y-%m)}"
+    [ -z "$INSTANCE" ] && echo "❌ Использование: quota.sh reset <name> [YYYY-MM]" && exit 1
+    _curl -X POST "$PROXY_URL/quota/reset" \
+        -H "Content-Type: application/json" \
+        -d "{\"instance\":\"$INSTANCE\",\"month\":\"$MONTH\"}" | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+print(f\"  ✅ Счётчик {d.get('reset')} сброшен ({d.get('month')})\") if d.get('ok') else print(f\"  ❌ {d.get('error')}\")
+"
     ;;
 
   *)
     echo "Использование:"
-    echo "  $0 report [YYYY-MM]          — отчёт по использованию"
-    echo "  $0 reset <instance>          — сбросить счётчик"
-    echo "  $0 set-limit <instance> <N>  — установить лимит токенов/мес"
+    echo "  $0 report [YYYY-MM]              — отчёт по токенам"
+    echo "  $0 set-limit <name> <tokens>     — установить квоту (без рестарта)"
+    echo "  $0 reset <name> [YYYY-MM]        — сбросить счётчик"
     ;;
 esac

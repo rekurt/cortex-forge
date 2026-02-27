@@ -6,11 +6,59 @@
 2. Read `USER.md`
 3. Read `memory/YYYY-MM-DD.md`
 
-## Инструменты администрирования
+---
 
-Все команды выполняются через `exec` в директории `/infra` (примонтирована read-write).
+## 🔑 Ключевой принцип
 
-### Управление инстансами
+Один корпоративный Anthropic API-ключ хранится **только в quota-proxy**.
+Инстансы используют квота-ключи — proxy знает кто есть кто и считает расход.
+Все изменения квот — **без рестарта**, через API.
+
+---
+
+## 📊 Управление квотами токенов
+
+### Отчёт по использованию
+```bash
+cd /infra && bash scripts/quota.sh report
+# или за конкретный месяц:
+bash scripts/quota.sh report 2026-03
+```
+
+### Установить/изменить лимит (мгновенно, без рестарта)
+```bash
+cd /infra && bash scripts/quota.sh set-limit alexey 500000
+bash scripts/quota.sh set-limit nikita 2000000
+bash scripts/quota.sh set-limit dmitry 0        # 0 = без лимита
+```
+
+### Сбросить счётчик (например, вручную в начале месяца)
+```bash
+cd /infra && bash scripts/quota.sh reset alexey
+bash scripts/quota.sh reset alexey 2026-02  # конкретный месяц
+```
+
+### Через API напрямую (если нужно из скрипта)
+```bash
+# Установить лимит
+curl -X POST http://quota-proxy:9090/quota/set-limit \
+  -H "Authorization: Bearer $QUOTA_ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"instance":"alexey","limit":500000}'
+
+# Получить отчёт
+curl http://quota-proxy:9090/quota/report \
+  -H "Authorization: Bearer $QUOTA_ADMIN_TOKEN"
+
+# Сбросить счётчик
+curl -X POST http://quota-proxy:9090/quota/reset \
+  -H "Authorization: Bearer $QUOTA_ADMIN_TOKEN" \
+  -d '{"instance":"alexey"}'
+```
+
+---
+
+## 👤 Управление инстансами
 
 ```bash
 # Добавить сотрудника
@@ -19,39 +67,31 @@ cd /infra && make add-user NAME=x BOT_TOKEN=y FULL_NAME="Имя" TG_ID=z
 # Удалить инстанс
 cd /infra && make remove-user NAME=x
 
-# Статус всех контейнеров
+# Статус / логи
 cd /infra && make status
-
-# Логи конкретного инстанса
 cd /infra && make logs NAME=x
 
-# Перезапустить инстанс
+# Перезапустить
 cd /infra && make restart NAME=x
 
-# Задеплоить / обновить всё
+# Задеплоить всё
 cd /infra && make deploy
 ```
 
-### Сервер
+---
+
+## 🖥️ Сервер
 
 ```bash
-# Место на диске
-df -h
-
-# Нагрузка
-top -bn1 | head -20
-
-# Обновление образа
-docker pull ghcr.io/openclaw/openclaw:latest && make deploy
+df -h                              # место на диске
+docker stats --no-stream           # нагрузка контейнеров
+docker pull ghcr.io/openclaw/openclaw:latest && cd /infra && make deploy  # обновить образ
 ```
+
+---
 
 ## Безопасность
 
-- НЕ читать файлы в `instances/*/workspace/` без явного запроса владельца
-- НЕ открывать порты наружу без подтверждения
-- Все деструктивные действия — с подтверждением
-
-## Доступ к серверу
-
-SSH-ключ лежит в `/run/secrets/admin_ssh_key` (Docker secret).
-Подключение: `ssh -i /run/secrets/admin_ssh_key user@SERVER_IP`
+- **НЕ читать** воркспейсы других инстансов без явного запроса владельца
+- **НЕ делиться** секретами одного инстанса с другим
+- Деструктивные действия — только с подтверждением
