@@ -17,6 +17,19 @@ One server. Zero data leakage between users. Full token cost control.
 
 ---
 
+## Product Line
+
+CortexForge ships as a suite of focused components — deploy all or just what you need:
+
+| Component | Description |
+|---|---|
+| 🧠 **CortexForge Core** | Main runtime — isolated AI persona instances, one per employee |
+| 🔐 **CortexForge Proxy** | Token quota enforcement — the only container that holds the real API key |
+| 🏛️ **CortexForge Prior** | Admin instance — infrastructure control, quota management, Docker access |
+| 📨 **CortexForge Broker** | Message bus — enables assistants to send messages to each other |
+
+---
+
 ## Why CortexForge?
 
 Most teams share a single AI tool — meaning everyone sees the same context, there are no personal settings, and there is no way to track who is spending what. CortexForge solves this:
@@ -34,11 +47,11 @@ Most teams share a single AI tool — meaning everyone sees the same context, th
 
 ## Features
 
-- 🔒 **Zero key exposure** — `ANTHROPIC_API_KEY` lives only in `quota-proxy`; instances get a `QUOTA_KEY` with no API access
+- 🔒 **CortexForge Proxy** — `ANTHROPIC_API_KEY` lives only here; instances get a `QUOTA_KEY` with zero direct API access
 - 📊 **Token quotas** — per-instance monthly limits with warning (80%) and hard cutoff (100%); change live without restart
 - 🧑‍🤝‍🧑 **Isolated personas** — each employee has their own bot, workspace, memory and character (`SOUL.md`)
-- 💬 **Inter-instance messaging** — assistants can send messages to each other via `message-broker`
-- 🏛️ **Admin instance (Prior)** — dedicated admin bot with full infrastructure access, quota management and Docker control
+- 💬 **CortexForge Broker** — message bus enabling inter-instance communication
+- 🏛️ **CortexForge Prior** — dedicated admin instance with full infrastructure access, quota management and Docker control
 - 📈 **Resource monitor** — CPU/RAM/disk metrics with configurable alert thresholds
 - 🔌 **Service agent** — HTTP API that lets backend services call skills (e.g. compliance checks) as subprocesses
 - 🛡️ **Security pipeline** — Semgrep, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck on every commit
@@ -61,8 +74,8 @@ Most teams share a single AI tool — meaning everyone sees the same context, th
 │       └─────────────┼─────────────┘                              │
 │                     │  ANTHROPIC_BASE_URL=http://quota-proxy     │
 │            ┌────────▼─────────┐                                  │
-│            │   quota-proxy    │  corp-internal                   │
-│            │   :9090          │  corp-admin                      │
+│            │  CortexForge     │  corp-internal                   │
+│            │  Proxy :9090     │  corp-admin                      │
 │            │                  │  corp-egress ──► internet        │
 │            │  ✓ counts tokens │                                  │
 │            │  ✓ enforces caps │                                  │
@@ -72,7 +85,7 @@ Most teams share a single AI tool — meaning everyone sees the same context, th
 │                     ▼  api.anthropic.com                         │
 │                                                                  │
 │  ┌───────────────────────┐   ┌──────────────────────────────┐   │
-│  │  message-broker :8080 │   │  resource-monitor :9091      │   │
+│  │  CortexForge Broker   │   │  resource-monitor :9091      │   │
 │  │  per-instance inbox   │   │  CPU / RAM / disk            │   │
 │  │  auth by key          │   │  alerts + HTTP API           │   │
 │  └───────────────────────┘   └──────────────────────────────┘   │

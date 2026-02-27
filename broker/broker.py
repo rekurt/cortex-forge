@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CortexForge / message broker  [hardened]
+CortexForge Broker — message bus  [hardened]
 
 Hardening:
   - Constant-time key comparison
