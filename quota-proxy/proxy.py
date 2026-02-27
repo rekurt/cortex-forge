@@ -22,12 +22,8 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 # ── Конфиг ─────────────────────────────────────────────────────────────────
-ANTHROPIC_UPSTREAM = "https://api.anthropic.com"
-KILO_UPSTREAM      = "https://api.kilo.ai/api/gateway"
-REAL_API_KEY       = os.environ.get("ANTHROPIC_API_KEY", "")
-# Автодетект: oat01-ключ → Kilo Gateway, иначе → прямой Anthropic
-_KILO_MODE = REAL_API_KEY.startswith("sk-ant-oat")
-UPSTREAM   = KILO_UPSTREAM if _KILO_MODE else ANTHROPIC_UPSTREAM
+UPSTREAM         = "https://api.anthropic.com"
+REAL_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
 ADMIN_TOKEN      = os.environ.get("QUOTA_ADMIN_TOKEN", "")
 
 if not REAL_API_KEY:
@@ -255,103 +251,6 @@ def _reset_usage(instance: str, month: str = None):
         _conn.execute("DELETE FROM usage WHERE instance=? AND month=?", (instance, month))
         _conn.commit()
 
-# ── Kilo Gateway: Anthropic ↔ OpenAI format conversion ─────────────────────
-
-def _content_to_str(content) -> str:
-    """Anthropic content (str или list блоков) → plain string для OpenAI."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = []
-        for block in content:
-            if isinstance(block, dict):
-                if block.get("type") == "text":
-                    parts.append(block.get("text", ""))
-                elif block.get("type") == "tool_use":
-                    parts.append(f"[tool: {block.get('name')}]")
-            elif isinstance(block, str):
-                parts.append(block)
-        return "".join(parts)
-    return str(content)
-
-def _anthropic_to_openai(body: dict) -> dict:
-    """Конвертирует Anthropic messages request → OpenAI chat/completions."""
-    messages = []
-    # system prompt → первое сообщение с role=system
-    if sys_prompt := body.get("system"):
-        if isinstance(sys_prompt, list):
-            sys_text = " ".join(b.get("text", "") for b in sys_prompt if isinstance(b, dict))
-        else:
-            sys_text = str(sys_prompt)
-        messages.append({"role": "system", "content": sys_text})
-    # основные сообщения
-    for msg in body.get("messages", []):
-        messages.append({"role": msg["role"], "content": _content_to_str(msg.get("content", ""))})
-
-    model = body.get("model", "claude-sonnet-4-6")
-    # добавляем "anthropic/" если нет провайдера
-    if "/" not in model:
-        model = f"anthropic/{model}"
-
-    result: dict = {
-        "model":    model,
-        "messages": messages,
-    }
-    if mt := body.get("max_tokens"):   result["max_tokens"]   = mt
-    if temp := body.get("temperature"): result["temperature"] = temp
-    if top_p := body.get("top_p"):     result["top_p"]        = top_p
-    # streaming: форвардим как есть
-    if "stream" in body:               result["stream"]        = body["stream"]
-    return result
-
-def _openai_to_anthropic(body: dict, input_tokens: int = 0) -> dict:
-    """Конвертирует OpenAI chat/completions response → Anthropic messages response."""
-    choices = body.get("choices", [])
-    text = ""
-    stop_reason = "end_turn"
-    if choices:
-        msg = choices[0].get("message", {})
-        text = msg.get("content") or ""
-        fr = choices[0].get("finish_reason", "stop")
-        stop_reason = {"stop": "end_turn", "length": "max_tokens",
-                       "tool_calls": "tool_use"}.get(fr, "end_turn")
-    usage = body.get("usage", {})
-    return {
-        "id":           body.get("id", "msg_proxy"),
-        "type":         "message",
-        "role":         "assistant",
-        "content":      [{"type": "text", "text": text}],
-        "model":        body.get("model", "unknown"),
-        "stop_reason":  stop_reason,
-        "stop_sequence": None,
-        "usage": {
-            "input_tokens":  usage.get("prompt_tokens", input_tokens),
-            "output_tokens": usage.get("completion_tokens", 0),
-        },
-    }
-
-def _openai_sse_to_anthropic_sse(line: bytes) -> list[bytes]:
-    """Конвертирует одну SSE-строку OpenAI → список Anthropic SSE строк."""
-    if not line.startswith(b"data: "):
-        return [line]
-    payload = line[6:]
-    if payload.strip() == b"[DONE]":
-        return [b"event: message_stop\r\ndata: {\"type\":\"message_stop\"}\r\n\r\n"]
-    try:
-        d = json.loads(payload)
-        delta_content = ""
-        choices = d.get("choices", [])
-        if choices:
-            delta_content = choices[0].get("delta", {}).get("content") or ""
-        if not delta_content:
-            return []
-        ev = json.dumps({"type": "content_block_delta",
-                         "index": 0,
-                         "delta": {"type": "text_delta", "text": delta_content}})
-        return [f"event: content_block_delta\r\ndata: {ev}\r\n\r\n".encode()]
-    except Exception:
-        return []
-
 # ── HTTP Handler ────────────────────────────────────────────────────────────
 _SEC_HEADERS = {
     "X-Content-Type-Options": "nosniff",
@@ -505,75 +404,30 @@ class Handler(BaseHTTPRequestHandler):
         if body_raw is None:
             self._json(413, {"error": "Request body too large (max 1MB)"}); return
 
-        if _KILO_MODE:
-            # ── Kilo Gateway (OpenAI-compatible) ──────────────────────────
-            try:
-                req_body = json.loads(body_raw) if body_raw else {}
-            except Exception:
-                req_body = {}
+        headers = {
+            "x-api-key":         REAL_API_KEY,
+            "anthropic-version": self.headers.get("anthropic-version", "2023-06-01"),
+            "content-type":      self.headers.get("content-type", "application/json"),
+        }
+        if v := self.headers.get("anthropic-beta"):
+            headers["anthropic-beta"] = v
 
-            is_stream = req_body.get("stream", False)
-            oai_body  = _anthropic_to_openai(req_body)
-            # Kilo: всегда non-stream для простоты proxy (streaming — в будущем)
-            oai_body["stream"] = False
-
-            kilo_headers = {
-                "Authorization": f"Bearer {REAL_API_KEY}",
-                "Content-Type":  "application/json",
-            }
-            try:
-                req = Request(f"{UPSTREAM}/chat/completions",
-                              data=json.dumps(oai_body).encode(),
-                              headers=kilo_headers, method="POST")
-                with urlopen(req, timeout=120) as r:
-                    resp_body, resp_status = r.read(), r.status
-                    resp_ct = "application/json"
-            except HTTPError as e:
-                resp_body, resp_status, resp_ct = e.read(), e.code, "application/json"
-            except URLError as e:
-                print(f"[quota] KILO ERROR {instance}: {e}", flush=True)
-                self._json(502, {"type": "error", "error": "upstream_unavailable",
-                                 "message": f"Kilo API недоступен: {e.reason}"}); return
-            except Exception as e:
-                print(f"[quota] UNEXPECTED ERROR {instance}: {e}", flush=True)
-                self._json(502, {"type": "error", "error": "proxy_error",
-                                 "message": "Внутренняя ошибка proxy"}); return
-
-            # Конвертируем ответ Kilo (OpenAI) → Anthropic
-            if resp_status == 200:
-                try:
-                    oai_resp  = json.loads(resp_body)
-                    ant_resp  = _openai_to_anthropic(oai_resp)
-                    resp_body = json.dumps(ant_resp).encode()
-                except Exception as e:
-                    print(f"[quota] CONVERT ERROR: {e}", flush=True)
-
-        else:
-            # ── Anthropic API (прямой форвард) ────────────────────────────
-            headers = {
-                "x-api-key":         REAL_API_KEY,
-                "anthropic-version": self.headers.get("anthropic-version", "2023-06-01"),
-                "content-type":      self.headers.get("content-type", "application/json"),
-            }
-            if v := self.headers.get("anthropic-beta"):
-                headers["anthropic-beta"] = v
-
-            try:
-                req = Request(UPSTREAM + self.path, data=body_raw or None,
-                              headers=headers, method=method)
-                with urlopen(req, timeout=120) as r:
-                    resp_body, resp_status = r.read(), r.status
-                    resp_ct = r.headers.get("Content-Type", "application/json")
-            except HTTPError as e:
-                resp_body, resp_status, resp_ct = e.read(), e.code, "application/json"
-            except URLError as e:
-                print(f"[quota] UPSTREAM ERROR {instance}: {e}", flush=True)
-                self._json(502, {"type": "error", "error": "upstream_unavailable",
-                                 "message": f"Anthropic API недоступен: {e.reason}"}); return
-            except Exception as e:
-                print(f"[quota] UNEXPECTED ERROR {instance}: {e}", flush=True)
-                self._json(502, {"type": "error", "error": "proxy_error",
-                                 "message": "Внутренняя ошибка proxy"}); return
+        try:
+            req = Request(UPSTREAM + self.path, data=body_raw or None,
+                          headers=headers, method=method)
+            with urlopen(req, timeout=120) as r:
+                resp_body, resp_status = r.read(), r.status
+                resp_ct = r.headers.get("Content-Type", "application/json")
+        except HTTPError as e:
+            resp_body, resp_status, resp_ct = e.read(), e.code, "application/json"
+        except URLError as e:
+            print(f"[quota] UPSTREAM ERROR {instance}: {e}", flush=True)
+            self._json(502, {"type": "error", "error": "upstream_unavailable",
+                             "message": f"Anthropic API недоступен: {e.reason}"}); return
+        except Exception as e:
+            print(f"[quota] UNEXPECTED ERROR {instance}: {e}", flush=True)
+            self._json(502, {"type": "error", "error": "proxy_error",
+                             "message": "Внутренняя ошибка proxy"}); return
 
         # Считаем токены из ответа
         try:
@@ -600,8 +454,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     instances = sorted(set(_quota_keys.values()))
-    mode_str = f"Kilo Gateway ({KILO_UPSTREAM})" if _KILO_MODE else f"Anthropic ({ANTHROPIC_UPSTREAM})"
-    print(f"✅ Quota-proxy hardened :{PORT} [{mode_str}]", flush=True)
+    print(f"✅ Quota-proxy hardened :{PORT}", flush=True)
     print(f"   Инстансы: {instances}", flush=True)
     print(f"   DB: {DB_PATH} (WAL mode)", flush=True)
     print(f"   Max body: {MAX_BODY_BYTES//1024}KB", flush=True)
