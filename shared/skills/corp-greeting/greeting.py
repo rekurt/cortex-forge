@@ -1,27 +1,33 @@
 #!/usr/bin/env python3
 """
 Генератор приветствий для Капуцина.
-Каждый запуск — новое сочетание. Детерминировано по дате + имени.
+Каждый вызов — новое сочетание (счётчик в файле).
 Использование: python3 greeting.py [--name Капуцин]
 """
 import sys
-import hashlib
-import datetime
+import random
+import pathlib
 
 NAME = "Капуцин"
 for i, arg in enumerate(sys.argv[1:]):
     if arg == "--name" and i + 1 < len(sys.argv[1:]):
         NAME = sys.argv[i + 2]
 
-# Сид: имя + дата (меняется каждый день, стабилен в течение дня)
-today = datetime.date.today().isoformat()
-seed_raw = f"{NAME}-{today}"
-seed = int(hashlib.md5(seed_raw.encode()).hexdigest(), 16)
+# Счётчик запусков — каждый /start даёт новое приветствие
+COUNTER_FILE = pathlib.Path(__file__).parent / ".greeting_counter"
+try:
+    counter = int(COUNTER_FILE.read_text().strip()) + 1
+except Exception:
+    counter = 0
+try:
+    COUNTER_FILE.write_text(str(counter))
+except Exception:
+    pass
+
+random.seed(counter)
 
 def pick(lst):
-    global seed
-    seed = (seed * 6364136223846793005 + 1442695040888963407) & 0xFFFFFFFFFFFFFFFF
-    return lst[seed % len(lst)]
+    return random.choice(lst)
 
 OPENERS = [
     "{name} на связи.",

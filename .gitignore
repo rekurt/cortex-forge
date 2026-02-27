@@ -32,3 +32,6 @@ backups/
 # OS
 .DS_Store
 Thumbs.db
+
+# Greeting counter state
+shared/skills/corp-greeting/.greeting_counter

@@ -28,7 +28,7 @@ Write things down. Mental notes don't survive restarts.
 | Скилл | Путь | Когда использовать |
 |---|---|---|
 | `compliance-risk` | `/shared/skills/compliance-risk/SKILL.md` | Проверка контрагента по ИНН/ОГРН/УНП/БИН, AML/KYC оценка риска, санкционный скрининг |
-| `corp-greeting` | `/shared/skills/corp-greeting/SKILL.md` | Приветствие при старте сессии — каждый день новое |
+| `corp-greeting` | `/shared/skills/corp-greeting/SKILL.md` | Приветствие при старте сессии — каждый раз новое |
 
 ## Tools
 
