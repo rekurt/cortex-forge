@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-corp-assistant / quota-proxy  [hardened]
+CortexForge / quota-proxy  [hardened]
 
 Единственное место, где хранится настоящий Anthropic API-ключ.
 Инстансы используют квота-ключи — proxy определяет кто есть кто.

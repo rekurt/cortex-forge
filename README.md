@@ -1,13 +1,13 @@
-# 🐒 corp-assistant
+# 🐒 CortexForge
 
 <p align="center">
-  <img src="assets/banner.jpg" alt="corp-assistant — isolated AI personas for every team member" width="1200"/>
+  <img src="assets/banner.jpg" alt="CortexForge — isolated AI personas for every team member" width="1200"/>
 </p>
 
 > **Language / Язык:** English | [Русский](README.ru.md)
 
-[![Version](https://img.shields.io/github/v/tag/rekurt/corp-assistant?label=version&color=blue)](https://github.com/rekurt/corp-assistant/releases)
-[![CI Security](https://github.com/rekurt/corp-assistant/actions/workflows/security.yml/badge.svg)](https://github.com/rekurt/corp-assistant/actions/workflows/security.yml)
+[![Version](https://img.shields.io/github/v/tag/rekurt/CortexForge?label=version&color=blue)](https://github.com/rekurt/CortexForge/releases)
+[![CI Security](https://github.com/rekurt/CortexForge/actions/workflows/security.yml/badge.svg)](https://github.com/rekurt/CortexForge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Corporate AI assistant infrastructure built on [OpenClaw](https://github.com/openclaw/openclaw).
@@ -17,9 +17,9 @@ One server. Zero data leakage between users. Full token cost control.
 
 ---
 
-## Why corp-assistant?
+## Why CortexForge?
 
-Most teams share a single AI tool — meaning everyone sees the same context, there are no personal settings, and there is no way to track who is spending what. corp-assistant solves this:
+Most teams share a single AI tool — meaning everyone sees the same context, there are no personal settings, and there is no way to track who is spending what. CortexForge solves this:
 
 | Problem | Solution |
 |---|---|
@@ -123,8 +123,8 @@ Instances sit on `corp-internal` only — they cannot reach the internet directl
 ### 1. Clone and configure global secrets
 
 ```bash
-git clone https://github.com/rekurt/corp-assistant.git /opt/corp-assistant
-cd /opt/corp-assistant
+git clone https://github.com/rekurt/CortexForge.git /opt/CortexForge
+cd /opt/CortexForge
 
 cp .env.example .env
 chmod 600 .env
@@ -339,7 +339,7 @@ The admin instance is named **Prior** 🏛️ (the head of a Capuchin monastery 
 ## Repository Structure
 
 ```
-corp-assistant/
+CortexForge/
 ├── quota-proxy/          # sole holder of ANTHROPIC_API_KEY
 │   ├── proxy.py          # HTTP proxy + SQLite quota & audit log
 │   └── Dockerfile
@@ -413,7 +413,7 @@ GitHub Actions runs on every push and PR:
 - Path traversal in `add-user.sh`
 - Real secrets in `.env.example`
 
-Current version: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/rekurt/corp-assistant/releases)
+Current version: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/rekurt/CortexForge/releases)
 
 ---
 

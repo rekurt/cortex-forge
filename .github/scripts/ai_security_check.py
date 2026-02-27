@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-AI Security Checker — кастомные проверки специфичные для corp-assistant.
+AI Security Checker — кастомные проверки специфичные для CortexForge.
 Запускается в GitHub Actions. Exit 1 при критических находках.
 """
 import re
