@@ -173,3 +173,4 @@ print(json.dumps({"result": "done", "input": params}))
 - Skills монтируются `:ro` (read-only)
 - `enrich.py` монтируется `:ro`
 - Все вызовы логируются в SQLite (`/data/usage.db`)
+- **Whitelist скиллов:** `_ALLOWED_SKILLS` (module-level `set`) заполняется при старте из `SKILLS_DIR`. `run_skill()` проверяет `skill_id not in allowed` **до** `subprocess.run()` — даже при прямом вызове в обход HTTP handler. Обновляется при запросе `GET /v1/skills`.

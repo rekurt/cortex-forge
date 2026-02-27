@@ -25,10 +25,17 @@ mkdir -p "$TARGET/workspace/memory"
 
 # Копируем шаблоны воркспейса
 cp -r "$TEMPLATE/workspace/"* "$TARGET/workspace/"
-sed -i "s/{{FULL_NAME}}/$FULL_NAME/g" "$TARGET/workspace/USER.md"
-sed -i "s/{{NAME}}/$NAME/g"           "$TARGET/workspace/USER.md"
-sed -i "s/{{FULL_NAME}}/$FULL_NAME/g" "$TARGET/workspace/IDENTITY.md"
-sed -i "s/{{NAME}}/$NAME/g"           "$TARGET/workspace/IDENTITY.md"
+# Используем Python для подстановки — безопасно для спецсимволов в FULL_NAME (/, &, \)
+python3 -c "
+import sys, pathlib
+name, full_name = sys.argv[1], sys.argv[2]
+for fname in ['USER.md', 'IDENTITY.md']:
+    p = pathlib.Path(f'$TARGET/workspace/{fname}')
+    if p.exists():
+        text = p.read_text()
+        text = text.replace('{{FULL_NAME}}', full_name).replace('{{NAME}}', name)
+        p.write_text(text)
+" "$NAME" "$FULL_NAME"
 
 # Генерируем ключи
 BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
@@ -88,10 +95,19 @@ service = f"""
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
     networks:
-      - corp-net
+      - corp-internal
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     depends_on:
-      - quota-proxy
-      - message-broker
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
     labels:
       corp.assistant.role: personal
       corp.assistant.user: {name}

@@ -29,6 +29,11 @@ fi
 
 FILES=$(git diff --staged --name-only | wc -l)
 git commit -m "backup: авто-бекап $TODAY ($FILES файлов)" --quiet
-git push --quiet
+
+if ! git push --quiet 2>&1; then
+    echo "❌ Ошибка git push! Бекап закоммичен локально, но не отправлен на remote." >&2
+    echo "   Проверь: git log -1 && git push" >&2
+    exit 1
+fi
 
 echo "✅ Запушено: $FILES файлов"

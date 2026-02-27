@@ -53,8 +53,12 @@ if lims:
 import json, sys
 d = json.load(sys.stdin)
 if d.get('ok'):
+    usage = d.get('current_usage', 0)
+    limit = d.get('limit', 0)
+    pct = round(usage / limit * 100, 1) if limit > 0 else 0
+    status = '❌ exceeded' if limit > 0 and usage >= limit else '⚠️ warning' if pct >= 80 else '✅ ok'
     print(f\"  ✅ Лимит {d['instance']}: {d['limit']:,} токенов/мес\")
-    print(f\"     Текущий расход: {d['current_usage']:,}  {d['status']}\")
+    print(f\"     Текущий расход: {usage:,}  {status}\")
 else:
     print(f\"  ❌ {d.get('error')}\")
 "
