@@ -76,8 +76,8 @@ services:
     restart: unless-stopped
     env_file: instances/admin/.env
     volumes:
-      - ./instances/admin/workspace:/home/user/.openclaw/workspace
-      - ./instances/admin/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+      - ./instances/admin/workspace:/home/node/.openclaw/workspace
+      - ./instances/admin/openclaw.json:/home/node/.openclaw/openclaw.json
       - ./shared/skills:/shared/skills:ro
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
       - ./instances:/infra/instances         # воркспейсы инстансов

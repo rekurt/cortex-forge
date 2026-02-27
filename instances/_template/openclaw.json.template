@@ -4,7 +4,7 @@
       "model": {
         "primary": "anthropic/claude-sonnet-4-6"
       },
-      "workspace": "/home/user/.openclaw/workspace",
+      "workspace": "/home/node/.openclaw/workspace",
       "compaction": {
         "mode": "safeguard"
       }
@@ -27,7 +27,8 @@
   },
   "gateway": {
     "mode": "local",
-    "bind": "loopback",
+    "port": 18789,
+    "bind": "0.0.0.0",
     "auth": {
       "mode": "token",
       "token": "${GATEWAY_TOKEN}"
