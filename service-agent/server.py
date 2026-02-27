@@ -44,6 +44,11 @@ log = logging.getLogger("service-agent")
 # Semaphore to cap concurrent skill executions
 _task_semaphore = threading.Semaphore(MAX_CONCURRENT_TASKS)
 
+# Explicit skill whitelist — populated at startup and on reload.
+# run_skill() checks this BEFORE subprocess.run() regardless of caller.
+_ALLOWED_SKILLS: set = set()
+_skills_lock = threading.Lock()
+
 
 # ── SQLite usage tracking ─────────────────────────────────────────────────────
 
@@ -160,6 +165,21 @@ def load_skills() -> dict:
     return skills
 
 
+def reload_skills() -> set:
+    """
+    Refresh the in-memory allowed skills whitelist from SKILLS_DIR.
+    Thread-safe. Called at startup and optionally on /v1/skills requests.
+    Returns the new whitelist set.
+    """
+    global _ALLOWED_SKILLS
+    discovered = set(load_skills().keys())
+    with _skills_lock:
+        _ALLOWED_SKILLS = discovered
+    log.info("Allowed skills whitelist refreshed: %s",
+             ", ".join(sorted(discovered)) or "(empty)")
+    return discovered
+
+
 def find_runner(skill_id: str) -> tuple:
     """Return (cmd_list, timeout) for the skill, or raise ValueError."""
     skill_dir = SKILLS_DIR / skill_id
@@ -194,6 +214,21 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
     Returns {"status": "ok"|"error", "skill": ..., "result": ..., "duration_ms": ...}
     """
     start = time.time()
+
+    # ── Explicit whitelist check (defense-in-depth) ───────────────────────────
+    # Must happen before subprocess.run(), even if the HTTP handler already
+    # validated the skill name. This protects against direct internal calls.
+    with _skills_lock:
+        allowed = frozenset(_ALLOWED_SKILLS)
+    if skill_id not in allowed:
+        log.warning("Blocked skill execution — '%s' not in ALLOWED_SKILLS (caller=%s)",
+                    skill_id, caller)
+        return {
+            "status":      "error",
+            "skill":       skill_id,
+            "error":       f"Skill '{skill_id}' is not in the allowed skills whitelist",
+            "duration_ms": 0,
+        }
 
     acquired = _task_semaphore.acquire(timeout=5)
     if not acquired:
@@ -329,6 +364,7 @@ class ServiceHandler(BaseHTTPRequestHandler):
 
         if path == "/v1/skills":
             skills = load_skills()
+            reload_skills()   # keep _ALLOWED_SKILLS in sync after any fs changes
             send_json(self, {"skills": list(skills.values()), "count": len(skills)})
 
         elif path == "/v1/usage":
@@ -366,9 +402,10 @@ class ServiceHandler(BaseHTTPRequestHandler):
                 send_json(self, {"status": "error", "error": "Invalid skill name"}, 400)
                 return
 
-            # Whitelist check: skill must be in loaded skills directory
-            _loaded_skills = load_skills()
-            if skill_id not in _loaded_skills:
+            # Whitelist check: skill must be in ALLOWED_SKILLS (populated at startup)
+            with _skills_lock:
+                allowed_now = frozenset(_ALLOWED_SKILLS)
+            if skill_id not in allowed_now:
                 send_json(self, {"status": "error", "error": f"Unknown skill: {skill_id}"}, 404)
                 return
 
@@ -388,8 +425,8 @@ def main():
     log.info(f"Skills dir: {SKILLS_DIR}")
     init_db()
 
-    skills = load_skills()
-    log.info(f"Loaded {len(skills)} skill(s): {', '.join(skills) or 'none'}")
+    skills_set = reload_skills()   # populates _ALLOWED_SKILLS whitelist
+    log.info(f"Loaded {len(skills_set)} skill(s): {', '.join(sorted(skills_set)) or 'none'}")
 
     server = HTTPServer(("0.0.0.0", SERVICE_PORT), ServiceHandler)
     log.info(f"Listening on 0.0.0.0:{SERVICE_PORT}")
