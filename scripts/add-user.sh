@@ -8,6 +8,13 @@ NAME="$1"
 BOT_TOKEN="$2"
 FULL_NAME="${3:-$NAME}"
 TG_ID="${4:-}"
+UI_PORT="${5:-}"
+
+# Авто-порт: считаем существующие инстансы и берём 18790+N
+if [ -z "$UI_PORT" ]; then
+  INSTANCE_COUNT=$(find instances -mindepth 1 -maxdepth 1 -type d ! -name "_template" ! -name "admin" | wc -l | tr -d ' ')
+  UI_PORT=$((18790 + INSTANCE_COUNT))
+fi
 TEMPLATE="instances/_template"
 TARGET="instances/$NAME"
 
@@ -80,9 +87,9 @@ if [ -f ".env" ]; then
 fi
 
 # Добавляем сервис в docker-compose.yml
-python3 - "$NAME" "$NAME_UPPER" << 'PYEOF'
+python3 - "$NAME" "$NAME_UPPER" "$UI_PORT" << 'PYEOF'
 import sys
-name, NAME_UPPER = sys.argv[1], sys.argv[2]
+name, NAME_UPPER, ui_port = sys.argv[1], sys.argv[2], sys.argv[3]
 
 service = f"""
   assistant-{name}:
@@ -101,6 +108,8 @@ service = f"""
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
       - NODE_OPTIONS=--max-old-space-size=768
+    ports:
+      - "127.0.0.1:{ui_port}:18789"   # OpenClaw Control UI
     networks:
       - corp-internal    # quota-proxy + broker (internal)
       - corp-outbound    # Telegram API + внешние вызовы
@@ -130,8 +139,9 @@ PYEOF
 echo ""
 echo "✅ Инстанс '$NAME' создан"
 echo "   Квота: 1,000,000 токенов/мес (изменить: make set-limit NAME=$NAME LIMIT=500000)"
+echo "   Control UI: http://localhost:$UI_PORT"
 echo ""
 echo "📋 Далее:"
-echo "  1. nano instances/$NAME/.env          — персональные токены"
+echo "  1. nano instances/$NAME/.env               — персональные токены"
 echo "  2. nano instances/$NAME/workspace/SOUL.md  — настроить персонажа"
 echo "  3. make deploy"
