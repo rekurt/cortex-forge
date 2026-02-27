@@ -1,76 +1,87 @@
 #!/usr/bin/env python3
 """
-corp-assistant / message broker
-Безопасная шина сообщений между инстансами ассистентов.
+corp-assistant / message broker  [hardened]
 
-Каждый инстанс идентифицируется своим API-ключом.
-Отправить можно только от своего имени — подделать sender нельзя.
-Читать можно только свой inbox.
-
-API:
-  POST /send   {to: "name", message: "text"}   → 200 / 403 / 404
-  GET  /inbox                                   → [{from, message, ts}]
-  GET  /health                                  → 200
+Hardening:
+  - Constant-time key comparison
+  - Rate limiting: 10 сообщений/мин на инстанс
+  - Max message size: 10KB
+  - Security headers
+  - Message size limit in inbox
 """
 
-import json
-import os
-import time
-import hashlib
-import threading
+import json, os, time, hashlib, hmac, threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from collections import defaultdict, deque
 from urllib.parse import urlparse
 
-# ── Конфиг ────────────────────────────────────────────────────────────────
-# Ключи берутся из env: BROKER_KEY_NIKITA=xxx BROKER_KEY_ALEXEY=yyy ...
-MAX_INBOX   = 100     # максимум сообщений в inbox
-MAX_AGE_SEC = 86400   # удалять сообщения старше 24ч
+MAX_MSG_BYTES = 10 * 1024   # 10KB на сообщение
+MAX_INBOX     = 100
+MAX_AGE_SEC   = 86400
 
-# ── Состояние ─────────────────────────────────────────────────────────────
 _lock   = threading.Lock()
-_inbox  = defaultdict(deque)     # {name: deque([{from, message, ts}])}
-_keys   = {}                     # {api_key_hash: name}
+_inbox  = defaultdict(deque)
+_keys: dict[str, str] = {}   # {sha256(key): instance_name}
 
 def _load_keys():
-    """Загружает API-ключи из env-переменных BROKER_KEY_<NAME>=<key>."""
     keys = {}
     for k, v in os.environ.items():
         if k.startswith("BROKER_KEY_") and v:
             name = k[len("BROKER_KEY_"):].lower()
-            keys[hashlib.sha256(v.encode()).hexdigest()] = name
+            keys[hashlib.sha256(v.strip().encode()).hexdigest()] = name
     return keys
 
 _keys = _load_keys()
 
+# ── Rate limiter ────────────────────────────────────────────────────────────
+class RateLimiter:
+    def __init__(self, rate: float, capacity: int):
+        self.rate, self.capacity = rate, capacity
+        self._b: dict[str, tuple[float, float]] = {}
+        self._l = threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        now = time.monotonic()
+        with self._l:
+            tokens, last = self._b.get(key, (self.capacity, now))
+            tokens = min(self.capacity, tokens + (now - last) * self.rate)
+            if tokens < 1:
+                self._b[key] = (tokens, now); return False
+            self._b[key] = (tokens - 1, now); return True
+
+_send_rl = RateLimiter(rate=10/60, capacity=10)  # 10 сообщений в минуту
+
+# Constant-time auth
 def _auth(req) -> str | None:
-    """Возвращает имя инстанса по Authorization: Bearer <key> или None."""
     auth = req.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        return None
-    key_hash = hashlib.sha256(auth[7:].encode()).hexdigest()
-    return _keys.get(key_hash)
+    if not auth.startswith("Bearer "): return None
+    h = hashlib.sha256(auth[7:].encode()).hexdigest()
+    result = None
+    for k, name in _keys.items():
+        if hmac.compare_digest(h, k):
+            result = name
+    return result
 
 def _cleanup():
-    """Удаляет устаревшие сообщения."""
     cutoff = time.time() - MAX_AGE_SEC
     with _lock:
-        for name in list(_inbox.keys()):
-            q = _inbox[name]
+        for q in _inbox.values():
             while q and q[0]["ts"] < cutoff:
                 q.popleft()
 
-# ── HTTP обработчик ────────────────────────────────────────────────────────
+_SEC_HEADERS = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
+
 class Handler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         print(f"[broker] {self.address_string()} {fmt % args}", flush=True)
 
-    def _respond(self, code: int, body: dict):
+    def _json(self, code, body):
         data = json.dumps(body, ensure_ascii=False).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", len(data))
+        for k, v in _SEC_HEADERS.items(): self.send_header(k, v)
         self.end_headers()
         self.wfile.write(data)
 
@@ -78,74 +89,67 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/health":
-            self._respond(200, {"status": "ok", "instances": list(set(_keys.values()))})
+            self._json(200, {"status": "ok", "instances": sorted(set(_keys.values()))})
             return
 
         if path == "/inbox":
             sender = _auth(self)
             if not sender:
-                self._respond(403, {"error": "Unauthorized"})
-                return
+                self._json(403, {"error": "Unauthorized"}); return
             _cleanup()
             with _lock:
                 msgs = list(_inbox[sender])
-            self._respond(200, {"inbox": msgs, "count": len(msgs)})
+            self._json(200, {"inbox": msgs, "count": len(msgs)})
             return
 
-        self._respond(404, {"error": "Not found"})
+        self._json(404, {"error": "Not found"})
 
     def do_POST(self):
-        path = urlparse(self.path).path
+        if urlparse(self.path).path != "/send":
+            self._json(404, {"error": "Not found"}); return
 
-        if path == "/send":
-            sender = _auth(self)
-            if not sender:
-                self._respond(403, {"error": "Unauthorized"})
-                return
+        sender = _auth(self)
+        if not sender:
+            self._json(403, {"error": "Unauthorized"}); return
 
-            length = int(self.headers.get("Content-Length", 0))
-            try:
-                body = json.loads(self.rfile.read(length))
-            except Exception:
-                self._respond(400, {"error": "Invalid JSON"})
-                return
+        # Rate limit
+        if not _send_rl.allow(sender):
+            self._json(429, {"error": "Rate limit exceeded (10 msg/min)"}); return
 
+        length = int(self.headers.get("Content-Length", 0))
+        if length > MAX_MSG_BYTES:
+            self._json(413, {"error": f"Message too large (max {MAX_MSG_BYTES//1024}KB)"}); return
+
+        try:
+            body    = json.loads(self.rfile.read(length))
             to      = str(body.get("to", "")).lower().strip()
             message = str(body.get("message", "")).strip()
+        except Exception:
+            self._json(400, {"error": "Invalid JSON"}); return
 
-            if not to or not message:
-                self._respond(400, {"error": "Missing 'to' or 'message'"})
-                return
+        if not to or not message:
+            self._json(400, {"error": "Missing 'to' or 'message'"}); return
 
-            # Получатель должен быть известным инстансом
-            known = set(_keys.values())
-            if to not in known:
-                self._respond(404, {"error": f"Unknown recipient: {to}"})
-                return
+        known = set(_keys.values())
+        if to not in known:
+            self._json(404, {"error": f"Unknown recipient: {to}"}); return
+        if to == sender:
+            self._json(400, {"error": "Cannot send to yourself"}); return
 
-            if to == sender:
-                self._respond(400, {"error": "Cannot send to yourself"})
-                return
+        msg = {"from": sender, "to": to, "message": message[:MAX_MSG_BYTES], "ts": time.time()}
+        with _lock:
+            q = _inbox[to]
+            if len(q) >= MAX_INBOX: q.popleft()
+            q.append(msg)
 
-            msg = {"from": sender, "to": to, "message": message, "ts": time.time()}
-            with _lock:
-                q = _inbox[to]
-                if len(q) >= MAX_INBOX:
-                    q.popleft()
-                q.append(msg)
-
-            print(f"[broker] {sender} → {to}: {message[:60]}", flush=True)
-            self._respond(200, {"ok": True, "from": sender, "to": to})
-            return
-
-        self._respond(404, {"error": "Not found"})
+        print(f"[broker] {sender} → {to}: {message[:60]}", flush=True)
+        self._json(200, {"ok": True, "from": sender, "to": to})
 
 
 if __name__ == "__main__":
     port = int(os.environ.get("BROKER_PORT", 8080))
     if not _keys:
-        print("⚠️  Нет API-ключей. Задай BROKER_KEY_<NAME>=<secret> в env.", flush=True)
+        print("⚠️  Нет API-ключей!", flush=True)
     else:
-        print(f"✅ Broker запущен на :{port}, инстансы: {sorted(set(_keys.values()))}", flush=True)
-    server = HTTPServer(("0.0.0.0", port), Handler)
-    server.serve_forever()
+        print(f"✅ Broker hardened :{port} | instances: {sorted(set(_keys.values()))}", flush=True)
+    HTTPServer(("0.0.0.0", port), Handler).serve_forever()

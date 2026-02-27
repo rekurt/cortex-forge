@@ -13,6 +13,12 @@ TARGET="instances/$NAME"
 
 [ -d "$TARGET" ] && echo "❌ Инстанс '$NAME' уже существует" && exit 1
 
+# Валидация имени: только a-z0-9-_ (защита от shell injection и path traversal)
+if ! echo "$NAME" | grep -qE '^[a-z][a-z0-9_-]{1,31}$'; then
+  echo "❌ Недопустимое имя '$NAME'. Только a-z, 0-9, -, _ (2-32 символа, начинается с буквы)"
+  exit 1
+fi
+
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
 mkdir -p "$TARGET/workspace/memory"

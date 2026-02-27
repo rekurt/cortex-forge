@@ -1,115 +1,156 @@
 services:
 
-  # ══════════════════════════════════════════════════════
-  # QUOTA PROXY — считает токены, режет при превышении квоты
-  # Все инстансы ходят в Anthropic только через него
-  # ══════════════════════════════════════════════════════
+  # ════════════════════════════════════════════════════
+  # QUOTA PROXY — единственное место с реальным API-ключом
+  # Hardened: нет проброса портов наружу, resource limits
+  # ════════════════════════════════════════════════════
   quota-proxy:
     build: ./quota-proxy
     container_name: corp-quota
     restart: unless-stopped
-    env_file:
-      - .env
-      # ANTHROPIC_API_KEY      — настоящий ключ (только здесь!)
-      # QUOTA_ADMIN_TOKEN      — токен для /quota/report и /quota/reset
-      # QUOTA_DEFAULT_MONTHLY  — лимит по умолчанию (токенов/мес), 0=без лимита
-      # QUOTA_KEY_<NAME>       — квота-ключ инстанса (генерируется при add-user)
-      # QUOTA_LIMIT_<NAME>     — лимит инстанса (токенов/мес)
+    env_file: .env
     environment:
       - QUOTA_DB=/data/quota.db
       - QUOTA_PORT=9090
     volumes:
       - quota-data:/data
-    # Порт открыт только для admin-отчётов (можно закрыть совсем)
-    ports:
-      - "127.0.0.1:9090:9090"
+    # ⚠️ Порт НЕ пробрасывается наружу — только внутри corp-internal
+    # Управление квотами — только через admin-контейнер
     networks:
-      - corp-net
+      - corp-internal
+      - corp-admin
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
-      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health')"]
+      test: ["CMD", "python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health', timeout=3)"]
       interval: 30s
       timeout: 5s
+      retries: 3
 
-  # ══════════════════════════════════════════════════════
-  # MESSAGE BROKER — шина сообщений между ассистентами
-  # ══════════════════════════════════════════════════════
+  # ════════════════════════════════════════════════════
+  # MESSAGE BROKER — шина сообщений (только corp-internal)
+  # ════════════════════════════════════════════════════
   message-broker:
     build: ./broker
     container_name: corp-broker
     restart: unless-stopped
-    env_file:
-      - .env
+    env_file: .env
     environment:
       - BROKER_PORT=8080
     networks:
-      - corp-net
+      - corp-internal
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 128M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
       timeout: 5s
 
-  # ══════════════════════════════════════════════════════
-  # ADMIN — единственный инстанс с доступом к инфраструктуре
-  # ══════════════════════════════════════════════════════
+  # ════════════════════════════════════════════════════
+  # ADMIN — управляет инфрой, видит только нужные папки
+  # НЕ монтирует .env (не видит ANTHROPIC_API_KEY)
+  # Подключён к corp-admin (для quota API) + corp-internal (для broker)
+  # ════════════════════════════════════════════════════
   assistant-admin:
     image: ghcr.io/openclaw/openclaw:latest
     container_name: corp-admin
     restart: unless-stopped
-    env_file:
-      - instances/admin/.env
+    env_file: instances/admin/.env
     volumes:
       - ./instances/admin/workspace:/home/user/.openclaw/workspace
       - ./instances/admin/openclaw.json:/home/user/.openclaw/openclaw.json:ro
       - ./shared/skills:/shared/skills:ro
-      - .:/infra                # только admin видит всё дерево
+      # Монтируем только то, что нужно для управления — НЕ .env с ключами
+      - ./instances:/infra/instances         # воркспейсы инстансов
+      - ./scripts:/infra/scripts:ro          # скрипты управления (read-only)
+      - ./shared:/infra/shared:ro            # shared skills
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # статус контейнеров (read-only)
     environment:
-      # Admin НЕ ограничен квотой — ходит напрямую
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_ADMIN}
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
     networks:
-      - corp-net
+      - corp-internal
+      - corp-admin
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
     depends_on:
-      - message-broker
-      - quota-proxy
-    labels:
-      corp.assistant.role: admin
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
 
-  # ══════════════════════════════════════════════════════
+  # ════════════════════════════════════════════════════
   # ПЕРСОНАЛЬНЫЕ ИНСТАНСЫ
-  # Добавляй: make add-user NAME=x BOT_TOKEN=y TG_ID=z
-  # ══════════════════════════════════════════════════════
+  # Шаблон — добавляется через: make add-user NAME=x BOT_TOKEN=y TG_ID=z
+  # Изолированы: нет /infra, нет corp-admin сети
+  # ════════════════════════════════════════════════════
 
   # assistant-nikita:
   #   image: ghcr.io/openclaw/openclaw:latest
   #   container_name: corp-nikita
   #   restart: unless-stopped
-  #   env_file:
-  #     - instances/nikita/.env
+  #   env_file: instances/nikita/.env
   #   volumes:
   #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
   #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
   #     - ./shared/skills:/shared/skills:ro
+  #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
   #   environment:
-  #     # Вместо ANTHROPIC_API_KEY — квота-ключ инстанса
-  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}
+  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}     # квота-ключ, не реальный
   #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
   #     - BROKER_URL=http://message-broker:8080
   #     - BROKER_KEY=${BROKER_KEY_NIKITA}
   #   networks:
-  #     - corp-net
+  #     - corp-internal   # broker + quota-proxy, но НЕ corp-admin
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: "1.0"
+  #         memory: 512M
   #   depends_on:
-  #     - quota-proxy
-  #     - message-broker
-  #   labels:
-  #     corp.assistant.role: personal
-  #     corp.assistant.user: nikita
+  #     quota-proxy:
+  #       condition: service_healthy
+  #     message-broker:
+  #       condition: service_healthy
 
 volumes:
   quota-data:
+    driver: local
 
 networks:
-  corp-net:
+  # Все инстансы + broker + quota-proxy
+  corp-internal:
     driver: bridge
+    internal: true   # нет доступа к интернету напрямую (через quota-proxy)
+
+  # Только admin + quota-proxy (для управления квотами)
+  corp-admin:
+    driver: bridge
+    internal: true

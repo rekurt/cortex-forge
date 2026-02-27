@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit
+.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -34,6 +34,31 @@ status:
 
 backup:
 	@bash scripts/backup.sh
+
+# ── Безопасность ───────────────────────────────────────────────────────────
+
+# Проверка базовых требований безопасности
+security-check:
+	@echo "🔒 Проверка безопасности..."
+	@[ -f .env ] && stat -c "%a" .env | grep -qE "^6[04]0$$" \
+	  && echo "  ✅ .env: права 600/640" \
+	  || echo "  ❌ .env: исправь права: chmod 600 .env"
+	@find instances -name ".env" | while read f; do \
+	  mode=$$(stat -c "%a" $$f); \
+	  echo $$mode | grep -qE "^6[04]0$$" \
+	    && echo "  ✅ $$f: $${mode}" \
+	    || echo "  ❌ $$f: chmod 600 $$f"; \
+	done
+	@grep -q "ANTHROPIC_API_KEY=sk-" .env 2>/dev/null \
+	  && echo "  ✅ ANTHROPIC_API_KEY задан" \
+	  || echo "  ❌ ANTHROPIC_API_KEY не задан в .env"
+	@grep -q "^QUOTA_ADMIN_TOKEN=.\{16\}" .env 2>/dev/null \
+	  && echo "  ✅ QUOTA_ADMIN_TOKEN достаточно длинный" \
+	  || echo "  ❌ QUOTA_ADMIN_TOKEN слишком короткий или не задан"
+	@! git ls-files .env 2>/dev/null | grep -q ".env" \
+	  && echo "  ✅ .env не в git" \
+	  || echo "  ❌ .env попал в git! git rm --cached .env"
+	@echo "  ℹ️  Проверь: docker compose ps (все контейнеры healthy?)"
 
 # ── Квоты токенов ─────────────────────────────────────────────────────────
 
