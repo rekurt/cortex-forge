@@ -5,6 +5,7 @@ docker-compose.override.yml
 .env
 instances/*/.env
 instances/*/openclaw.json
+!instances/admin/openclaw.json
 **/*.env
 **/*.key
 **/*.token
