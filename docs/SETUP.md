@@ -32,8 +32,8 @@ docker compose version    # Docker Compose version 2.x
 ## 2. Клонирование репозитория
 
 ```bash
-git clone https://github.com/example-org/corp-assistant.git /opt/corp-assistant
-cd /opt/corp-assistant
+git clone https://github.com/example-org/CortexForge.git /opt/CortexForge
+cd /opt/CortexForge
 ```
 
 ---
@@ -133,14 +133,14 @@ make monitor         # метрики CPU/RAM/диска
 ## 8. Автозапуск (systemd)
 
 ```bash
-cat > /etc/systemd/system/corp-assistant.service << 'EOF'
+cat > /etc/systemd/system/cortexforge.service << 'EOF'
 [Unit]
 Description=Corp Assistant
 After=docker.service
 Requires=docker.service
 
 [Service]
-WorkingDirectory=/opt/corp-assistant
+WorkingDirectory=/opt/CortexForge
 ExecStart=docker compose up
 ExecStop=docker compose down
 Restart=on-failure
@@ -151,7 +151,7 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now corp-assistant
+systemctl enable --now CortexForge
 ```
 
 ---
@@ -160,8 +160,8 @@ systemctl enable --now corp-assistant
 
 ```bash
 # Ежедневно в 2:00
-echo "0 2 * * * root cd /opt/corp-assistant && make backup >> /var/log/corp-backup.log 2>&1" \
-  >> /etc/cron.d/corp-assistant
+echo "0 2 * * * root cd /opt/CortexForge && make backup >> /var/log/cortexforge-backup.log 2>&1" \
+  >> /etc/cron.d/cortexforge
 ```
 
 Бэкапы сохраняются в `backups/` в виде `.tar.gz`. Рекомендуется настроить синхронизацию на внешнее хранилище.
@@ -171,7 +171,7 @@ echo "0 2 * * * root cd /opt/corp-assistant && make backup >> /var/log/corp-back
 ## Обновление
 
 ```bash
-cd /opt/corp-assistant
+cd /opt/CortexForge
 git pull origin master
 make deploy    # пересобирает изменившиеся образы, перезапускает
 ```

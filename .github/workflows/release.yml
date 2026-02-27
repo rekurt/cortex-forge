@@ -13,7 +13,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/corp-assistant
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/cortexforge
 
 jobs:
   # ═══════════════════════════════════════════════════════════
@@ -155,7 +155,7 @@ jobs:
           TAG="v${VERSION}"
           
           {
-            echo "## 🐒 corp-assistant v${VERSION}"
+            echo "## 🐒 CortexForge v${VERSION}"
             echo ""
             echo "### 🐳 Docker образы"
             for svc in broker quota-proxy service-agent resource-monitor; do

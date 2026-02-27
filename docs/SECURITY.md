@@ -4,7 +4,7 @@
 
 **Please do not open a public GitHub issue for security vulnerabilities.**
 
-Use **[GitHub Security Advisories](https://github.com/example-org/corp-assistant/security/advisories/new)** to report privately.
+Use **[GitHub Security Advisories](https://github.com/example-org/CortexForge/security/advisories/new)** to report privately.
 
 | | SLA |
 |---|---|

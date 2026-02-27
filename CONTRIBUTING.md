@@ -1,4 +1,4 @@
-# Contributing to corp-assistant
+# Contributing to CortexForge
 
 Thank you for your interest in contributing! This guide covers everything you need to get started.
 
@@ -23,13 +23,13 @@ This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By particip
 
 ### Reporting Bugs
 
-1. Search [existing issues](https://github.com/example-org/corp-assistant/issues) first
-2. If not found — open a [bug report](https://github.com/example-org/corp-assistant/issues/new?template=bug_report.yml)
+1. Search [existing issues](https://github.com/example-org/CortexForge/issues) first
+2. If not found — open a [bug report](https://github.com/example-org/CortexForge/issues/new?template=bug_report.yml)
 3. Include: version, OS, steps to reproduce, expected vs actual behaviour
 
 ### Suggesting Features
 
-Open a [feature request](https://github.com/example-org/corp-assistant/issues/new?template=feature_request.yml).
+Open a [feature request](https://github.com/example-org/CortexForge/issues/new?template=feature_request.yml).
 Describe the problem you're solving, not just the solution.
 
 ### Contributing Code
@@ -47,8 +47,8 @@ Describe the problem you're solving, not just the solution.
 **Requirements:** Docker 24+, Docker Compose 2.x, Python 3.12+
 
 ```bash
-git clone https://github.com/example-org/corp-assistant.git
-cd corp-assistant
+git clone https://github.com/example-org/CortexForge.git
+cd CortexForge
 
 # Global config
 cp .env.example .env

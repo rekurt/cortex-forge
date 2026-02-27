@@ -1,13 +1,13 @@
-# 🐒 corp-assistant
+# 🐒 CortexForge
 
 <p align="center">
-  <img src="assets/banner.jpg" alt="corp-assistant — изолированные AI-персонажи для каждого сотрудника" width="1200"/>
+  <img src="assets/banner.jpg" alt="CortexForge — изолированные AI-персонажи для каждого сотрудника" width="1200"/>
 </p>
 
 > **Language / Язык:** [English](README.md) | Русский
 
-[![Version](https://img.shields.io/github/v/tag/user-1/corp-assistant?label=версия&color=blue)](https://github.com/example-org/corp-assistant/releases)
-[![CI Security](https://github.com/example-org/corp-assistant/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/corp-assistant/actions/workflows/security.yml)
+[![Version](https://img.shields.io/github/v/tag/user-1/CortexForge?label=версия&color=blue)](https://github.com/example-org/CortexForge/releases)
+[![CI Security](https://github.com/example-org/CortexForge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/CortexForge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
 
 Корпоративная инфраструктура AI-ассистентов на базе [OpenClaw](https://github.com/openclaw/openclaw).
@@ -17,9 +17,9 @@
 
 ---
 
-## Зачем corp-assistant?
+## Зачем CortexForge?
 
-Большинство команд используют единый AI-инструмент — один контекст на всех, никаких личных настроек, и непонятно кто сколько тратит. corp-assistant решает это:
+Большинство команд используют единый AI-инструмент — один контекст на всех, никаких личных настроек, и непонятно кто сколько тратит. CortexForge решает это:
 
 | Проблема | Решение |
 |---|---|
@@ -123,8 +123,8 @@
 ### 1. Клонировать и настроить глобальные секреты
 
 ```bash
-git clone https://github.com/example-org/corp-assistant.git /opt/corp-assistant
-cd /opt/corp-assistant
+git clone https://github.com/example-org/CortexForge.git /opt/CortexForge
+cd /opt/CortexForge
 
 cp .env.example .env
 chmod 600 .env
@@ -339,7 +339,7 @@ Admin-инстанс называется **Admin** 🏛️ (настоятел�
 ## Структура репозитория
 
 ```
-corp-assistant/
+CortexForge/
 ├── quota-proxy/          # единственное место с ANTHROPIC_API_KEY
 │   ├── proxy.py          # HTTP-прокси + SQLite quota & audit log
 │   └── Dockerfile
@@ -413,7 +413,7 @@ GitHub Actions запускается при каждом пуше и PR:
 - Path traversal в `add-user.sh`
 - Реальные секреты в `.env.example`
 
-Текущая версия: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/example-org/corp-assistant/releases)
+Текущая версия: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/example-org/CortexForge/releases)
 
 ---
 

@@ -21,7 +21,7 @@ body:
     id: component
     attributes:
       label: Component
-      description: Which part of corp-assistant is affected?
+      description: Which part of CortexForge is affected?
       options:
         - quota-proxy
         - message-broker
