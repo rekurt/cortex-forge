@@ -130,12 +130,11 @@ Healthcheck без авторизации. Используется Docker дл�
 
 ```yaml
 volumes:
-  - ${ENRICH_PY_PATH:-./service-agent/skills/compliance/enrich_placeholder.py}:/app/skills/compliance/enrich.py:ro
 ```
 
 Настройка в `.env`:
 ```
-ENRICH_PY_PATH=/home/user/.openclaw/workspace/skills/compliance-risk/scripts/enrich.py
+# ENRICH_PY_PATH — скопируй реальный enrich.py в service-agent/skills/compliance/enrich.py
 ```
 
 ## Репликация service-инстансов
