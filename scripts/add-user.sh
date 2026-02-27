@@ -25,18 +25,26 @@ mkdir -p "$TARGET/workspace/skills"
 # Копируем шаблоны workspace
 cp -r "$TEMPLATE/workspace/"* "$TARGET/workspace/"
 
-# Подставляем имя пользователя в шаблоны
+# Подставляем имя
 sed -i "s/{{FULL_NAME}}/$FULL_NAME/g" "$TARGET/workspace/USER.md"
 sed -i "s/{{NAME}}/$NAME/g"          "$TARGET/workspace/USER.md"
 sed -i "s/{{FULL_NAME}}/$FULL_NAME/g" "$TARGET/workspace/IDENTITY.md"
 sed -i "s/{{NAME}}/$NAME/g"          "$TARGET/workspace/IDENTITY.md"
 
-# Создаём .env для инстанса
+# Генерируем уникальный API-ключ для брокера
+BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+
+# .env инстанса
 cat > "$TARGET/.env" << EOF
 # Секреты инстанса $NAME — НЕ коммитить в git!
 TELEGRAM_BOT_TOKEN=$BOT_TOKEN
 TELEGRAM_ALLOW_FROM=${TG_ID}
-# Добавить персональные токены ниже:
+
+# Message broker
+BROKER_URL=http://message-broker:8080
+BROKER_KEY=$BROKER_KEY
+
+# Персональные токены:
 # YANDEX_OAUTH_TOKEN=
 # YANDEX_CALDAV_URL=
 # YANDEX_USER=
@@ -44,7 +52,14 @@ TELEGRAM_ALLOW_FROM=${TG_ID}
 # GITLAB_TOKEN=
 EOF
 
-# Копируем openclaw.json.template
+# Добавляем ключ брокера в глобальный .env
+NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
+if [ -f ".env" ]; then
+  echo "BROKER_KEY_${NAME_UPPER}=${BROKER_KEY}" >> .env
+  echo "  ✅ BROKER_KEY_${NAME_UPPER} добавлен в .env"
+fi
+
+# openclaw.json
 cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw.json"
 sed -i "s/{{BOT_TOKEN}}/$BOT_TOKEN/g" "$TARGET/openclaw.json"
 sed -i "s/{{TG_ID}}/$TG_ID/g"        "$TARGET/openclaw.json"
@@ -54,6 +69,8 @@ python3 - "$NAME" << 'PYEOF'
 import sys, re
 
 name = sys.argv[1]
+NAME_UPPER = name.upper()
+
 service = f"""
   assistant-{name}:
     image: ghcr.io/openclaw/openclaw:latest
@@ -67,13 +84,20 @@ service = f"""
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
+    networks:
+      - corp-net
+    depends_on:
+      - message-broker
     labels:
+      corp.assistant.role: personal
       corp.assistant.user: {name}
 """
 
 content = open("docker-compose.yml").read()
-# Убираем финальный комментарий-заглушку если пусто
-content = content.rstrip() + "\n" + service
+# Вставляем перед блоком networks:
+content = content.replace("\nnetworks:", service + "\nnetworks:")
 open("docker-compose.yml", "w").write(content)
 print(f"  ✅ Сервис assistant-{name} добавлен в docker-compose.yml")
 PYEOF
@@ -82,7 +106,6 @@ echo ""
 echo "✅ Инстанс '$NAME' создан: $TARGET"
 echo ""
 echo "📋 Следующие шаги:"
-echo "  1. Заполни секреты: $TARGET/.env"
-echo "  2. Настрой персонажа: $TARGET/workspace/SOUL.md"
+echo "  1. Заполни секреты: nano $TARGET/.env"
+echo "  2. Настрой персонажа: nano $TARGET/workspace/SOUL.md"
 echo "  3. make deploy"
-echo "  4. Скажи $FULL_NAME написать боту первое сообщение"

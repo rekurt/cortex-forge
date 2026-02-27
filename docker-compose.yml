@@ -1,8 +1,60 @@
 services:
-  # ──────────────────────────────────────────────────────
-  # Шаблон — скопируй секцию для каждого нового сотрудника
-  # Команда: make add-user NAME=alexey BOT_TOKEN=xxx
-  # ──────────────────────────────────────────────────────
+
+  # ══════════════════════════════════════════════════════
+  # MESSAGE BROKER — шина сообщений между ассистентами
+  # Доступен только внутри docker-сети, снаружи закрыт
+  # ══════════════════════════════════════════════════════
+  message-broker:
+    build: ./broker
+    container_name: corp-broker
+    restart: unless-stopped
+    env_file:
+      - .env
+      # Ключи вида BROKER_KEY_<NAME>=<secret> добавляй в .env
+      # Пример: BROKER_KEY_NIKITA=random_secret_1
+      #         BROKER_KEY_ALEXEY=random_secret_2
+    environment:
+      - BROKER_PORT=8080
+    # Порт НЕ проброшен наружу — только внутри сети
+    networks:
+      - corp-net
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+
+  # ══════════════════════════════════════════════════════
+  # ADMIN — единственный инстанс с доступом к инфраструктуре
+  # ══════════════════════════════════════════════════════
+  assistant-admin:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-admin
+    restart: unless-stopped
+    env_file:
+      - instances/admin/.env
+    volumes:
+      - ./instances/admin/workspace:/home/user/.openclaw/workspace
+      - ./instances/admin/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+      - ./shared/skills:/shared/skills:ro
+      # Только admin монтирует корень инфры (read-write)
+      - .:/infra
+      # SSH-ключ для доступа к серверу (Docker secret или bind mount)
+      # - ~/.ssh/admin_key:/run/secrets/admin_ssh_key:ro
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_ADMIN}
+    networks:
+      - corp-net
+    depends_on:
+      - message-broker
+    labels:
+      corp.assistant.role: admin
+
+  # ══════════════════════════════════════════════════════
+  # ПЕРСОНАЛЬНЫЕ ИНСТАНСЫ
+  # Добавляй командой: make add-user NAME=x BOT_TOKEN=y TG_ID=z
+  # ══════════════════════════════════════════════════════
 
   # assistant-nikita:
   #   image: ghcr.io/openclaw/openclaw:latest
@@ -14,20 +66,20 @@ services:
   #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
   #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
   #     - ./shared/skills:/shared/skills:ro
+  #     # НЕТ доступа к /infra — только admin
   #   environment:
   #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  #     - BROKER_URL=http://message-broker:8080
+  #     - BROKER_KEY=${BROKER_KEY_NIKITA}
+  #   networks:
+  #     - corp-net
+  #   depends_on:
+  #     - message-broker
   #   labels:
+  #     corp.assistant.role: personal
   #     corp.assistant.user: nikita
 
-  # assistant-alexey:
-  #   image: ghcr.io/openclaw/openclaw:latest
-  #   container_name: corp-alexey
-  #   restart: unless-stopped
-  #   env_file:
-  #     - instances/alexey/.env
-  #   volumes:
-  #     - ./instances/alexey/workspace:/home/user/.openclaw/workspace
-  #     - ./instances/alexey/openclaw.json:/home/user/.openclaw/openclaw.json:ro
-  #     - ./shared/skills:/shared/skills:ro
-  #   environment:
-  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+networks:
+  corp-net:
+    driver: bridge
+    # Изолированная сеть — контейнеры видят друг друга, снаружи — нет
