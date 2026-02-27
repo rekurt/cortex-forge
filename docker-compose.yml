@@ -90,6 +90,7 @@ services:
       - BROKER_KEY=${BROKER_KEY_ADMIN}
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+      - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
       - corp-admin
@@ -99,7 +100,7 @@ services:
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 1G
     depends_on:
       quota-proxy:
         condition: service_healthy
