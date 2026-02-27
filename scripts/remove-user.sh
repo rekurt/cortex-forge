@@ -50,20 +50,42 @@ print(f'  ✅ Удалено {removed} ключей из .env')
 " "$NAME_UPPER"
 fi
 
-# Удаляем сервис из docker-compose.yml
+# Удаляем сервис из docker-compose.yml (построчный парсинг — безопаснее regex)
 python3 -c "
-import sys, re
+import sys
 name = sys.argv[1]
+service_key = f'  assistant-{name}:'
+
 with open('docker-compose.yml') as f:
-    content = f.read()
+    lines = f.readlines()
 
-# Удаляем блок assistant-{name}: ... до следующего сервиса или секции верхнего уровня
-pattern = rf'\n  assistant-{re.escape(name)}:.*?(?=\n  \S|\nvolumes:|\nnetworks:|\Z)'
-new_content = re.sub(pattern, '', content, flags=re.DOTALL)
+result = []
+in_block = False
+found = False
 
-if new_content != content:
+for line in lines:
+    stripped = line.rstrip()
+
+    # Обнаруживаем начало целевого блока сервиса (ровно 2 пробела отступа)
+    if stripped == service_key:
+        in_block = True
+        found = True
+        continue
+
+    if in_block:
+        # Конец блока: строка с отступом <= 2 пробел и непустая (следующий сервис
+        # или топ-уровневый ключ типа 'volumes:' / 'networks:')
+        if line and not line.startswith('   ') and stripped:
+            in_block = False
+            result.append(line)
+        # Иначе — пропускаем строки текущего блока
+        continue
+
+    result.append(line)
+
+if found:
     with open('docker-compose.yml', 'w') as f:
-        f.write(new_content)
+        f.writelines(result)
     print(f'  ✅ assistant-{name} удалён из docker-compose.yml')
 else:
     print(f'  ⚠️  assistant-{name} не найден в docker-compose.yml')

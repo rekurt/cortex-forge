@@ -51,6 +51,11 @@ cd /opt/corp-assistant
 cp .env.example .env
 nano .env  # ANTHROPIC_API_KEY, QUOTA_ADMIN_TOKEN, BROKER_KEY_ADMIN
 
+# Создать .env для admin-инстанса (обязательно — docker-compose требует этот файл)
+mkdir -p instances/admin
+cp instances/.env.example instances/admin/.env
+nano instances/admin/.env  # BOT_TOKEN, TELEGRAM_ALLOWED_FROM, BROKER_KEY
+
 # Добавить первого сотрудника
 make add-user NAME=alexey BOT_TOKEN=7xxx FULL_NAME="Алексей Михайлюк" TG_ID=123456789
 nano instances/alexey/.env          # персональные токены

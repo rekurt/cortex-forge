@@ -16,9 +16,11 @@ services:
       - quota-data:/data
     # ⚠️ Порт НЕ пробрасывается наружу — только внутри corp-internal
     # Управление квотами — только через admin-контейнер
+    # corp-egress нужен для форвардинга запросов в api.anthropic.com
     networks:
       - corp-internal
       - corp-admin
+      - corp-egress
     security_opt:
       - no-new-privileges:true
     read_only: true
@@ -242,3 +244,10 @@ networks:
   corp-services:
     driver: bridge
     # НЕ internal: true — backend сервисы могут ходить через docker network
+
+  # Egress-only сеть для quota-proxy: только этот контейнер имеет выход в интернет.
+  # Все остальные сети — internal: true, что гарантирует что инстансы не ходят
+  # напрямую в api.anthropic.com — только через quota-proxy.
+  corp-egress:
+    driver: bridge
+    # Нет internal: true — quota-proxy форвардит запросы в api.anthropic.com
