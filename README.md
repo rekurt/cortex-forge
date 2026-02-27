@@ -1,7 +1,7 @@
 # 🐒 corp-assistant
 
 <p align="center">
-  <img src="assets/banner.jpg" alt="corp-assistant — isolated AI personas for every team member" width="600"/>
+  <img src="assets/banner.jpg" alt="corp-assistant — isolated AI personas for every team member" width="1200"/>
 </p>
 
 > **Language / Язык:** English | [Русский](README.ru.md)
