@@ -1,12 +1,14 @@
 # 🤖 corp-assistant
 
-Корпоративная инфраструктура AI-ассистентов на базе [OpenClaw](https://github.com/openclaw/openclaw).
+> **Language / Язык:** English | [Русский](README.ru.md)
 
-Каждый сотрудник — **изолированный персонаж**. Один сервер, нулевые утечки данных, контроль расходов.
+Corporate AI assistant infrastructure built on [OpenClaw](https://github.com/openclaw/openclaw).
+
+Each employee gets an **isolated persona** — their own Telegram bot, their own memory, their own character. One server, zero data leakage between users, full token cost control.
 
 ---
 
-## Архитектура
+## Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -14,7 +16,7 @@
 │                                                                  │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐                       │
 │  │  nikita  │  │  alexey  │  │  dmitry  │  ...  corp-internal   │
-│  │ свой бот │  │ свой бот │  │ свой бот │                       │
+│  │ own bot  │  │ own bot  │  │ own bot  │                       │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
 │       │             │             │                              │
 │       └─────────────┼─────────────┘                              │
@@ -22,166 +24,167 @@
 │            ┌────────▼────────┐                                   │
 │            │  quota-proxy    │  corp-internal + corp-admin       │
 │            │  :9090          │  + corp-egress (→ internet)       │
-│            │  токены/лимиты  │                                   │
+│            │  token counter  │                                   │
 │            └────────┬────────┘                                   │
 │                     │                                            │
 │                     ▼  api.anthropic.com  (via corp-egress)      │
 │                                                                  │
 │  ┌──────────────────────────┐  ┌──────────────────────────────┐  │
 │  │  message-broker :8080    │  │  resource-monitor :9091      │  │
-│  │  inbox per instance      │  │  CPU/RAM/disk + алерты       │  │
+│  │  per-instance inbox      │  │  CPU/RAM/disk + alerts       │  │
 │  │  auth by key             │  │  HTTP API /metrics /alerts   │  │
 │  └──────────────────────────┘  └──────────────────────────────┘  │
 │                                                                  │
 │  ┌──────────────────────────┐  ┌──────────────────────────────┐  │
-│  │  service-agent :8090     │  │  ADMIN (Приор) 🏛️            │  │
-│  │  HTTP API для бэкендов   │  │  единственный с /infra       │  │
-│  │  скиллы как субпроцессы  │  │  quota / users / docker      │  │
+│  │  service-agent :8090     │  │  ADMIN (Prior) 🏛️            │  │
+│  │  HTTP API for backends   │  │  sole /infra access          │  │
+│  │  skills as subprocesses  │  │  quota / users / docker      │  │
 │  └──────────────────────────┘  └──────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### Docker-сети
+### Docker Networks
 
-| Сеть | `internal` | Кто подключён | Назначение |
+| Network | `internal` | Connected to | Purpose |
 |---|---|---|---|
-| `corp-internal` | ✅ да | все инстансы, broker, quota-proxy, monitor | основная шина |
-| `corp-admin` | ✅ да | admin, quota-proxy, monitor | управление квотами и метриками |
-| `corp-egress` | ❌ нет | quota-proxy | выход в `api.anthropic.com` |
-| `corp-services` | ❌ нет | service-agent | вызовы из бэкенд-сервисов |
+| `corp-internal` | ✅ yes | all instances, broker, quota-proxy, monitor | main data bus |
+| `corp-admin` | ✅ yes | admin, quota-proxy, monitor | quota management & metrics |
+| `corp-egress` | ❌ no | quota-proxy only | egress to `api.anthropic.com` |
+| `corp-services` | ❌ no | service-agent | calls from backend services |
+
+The `internal: true` flag on `corp-internal` and `corp-admin` means **no direct internet access** for instances — all LLM traffic is routed through `quota-proxy`, which is the only container on the non-internal `corp-egress` network.
 
 ---
 
-## Быстрый старт
+## Quick Start
 
 ```bash
 git clone https://github.com/rekurt/corp-assistant.git /opt/corp-assistant
 cd /opt/corp-assistant
 
-# 1. Глобальные секреты (API-ключ, токены управления)
+# 1. Global secrets (API key, management tokens)
 cp .env.example .env
 nano .env  # ANTHROPIC_API_KEY, QUOTA_ADMIN_TOKEN, BROKER_KEY_ADMIN
 
-# 2. Секреты admin-инстанса (обязательно — docker-compose требует этот файл)
+# 2. Admin instance secrets (required — docker-compose fails without this file)
 mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
 nano instances/admin/.env  # TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM, BROKER_KEY
 
-# 3. Проверка конфигурации
+# 3. Validate config
 make security-check
 
-# 4. Добавить первого сотрудника
-make add-user NAME=alexey BOT_TOKEN=7xxx FULL_NAME="Алексей Михайлюк" TG_ID=123456789
-nano instances/alexey/.env               # персональные токены (Яндекс, GitLab, …)
-nano instances/alexey/workspace/SOUL.md  # настроить персонажа
+# 4. Add the first employee
+make add-user NAME=alexey BOT_TOKEN=7xxx FULL_NAME="Alexey Mikhailyuk" TG_ID=123456789
+nano instances/alexey/.env               # personal tokens (Yandex, GitLab, …)
+nano instances/alexey/workspace/SOUL.md  # configure the persona
 
-# 5. Запустить
+# 5. Launch
 make deploy
 ```
 
 ---
 
-## Команды
+## Commands
 
-### Управление инстансами
+### Instance Management
 
-| Команда | Описание |
+| Command | Description |
 |---|---|
-| `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Онбординг нового сотрудника |
-| `make remove-user NAME=x` | Удалить инстанс (с архивом воркспейса) |
-| `make deploy` | Запустить / обновить все контейнеры |
-| `make restart NAME=x` | Перезапустить один инстанс |
-| `make logs NAME=x` | Следить за логами инстанса |
-| `make status` | Статус всех контейнеров |
-| `make backup` | Бэкап воркспейсов в `backups/` |
+| `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Onboard a new employee |
+| `make remove-user NAME=x` | Remove instance (archives workspace first) |
+| `make deploy` | Start / rebuild all containers |
+| `make restart NAME=x` | Restart a single instance |
+| `make logs NAME=x` | Tail logs for an instance |
+| `make status` | Status of all containers |
+| `make backup` | Back up workspaces to `backups/` |
 
-### Квоты токенов
+### Token Quotas
 
-| Команда | Описание |
+| Command | Description |
 |---|---|
-| `make quota-report` | Отчёт за текущий месяц |
-| `make quota-report MONTH=2026-03` | Отчёт за конкретный месяц |
-| `make set-limit NAME=x LIMIT=500000` | Установить квоту (токенов/мес), без рестарта |
-| `make quota-reset NAME=x` | Сбросить счётчик текущего месяца |
+| `make quota-report` | Usage report for the current month |
+| `make quota-report MONTH=2026-03` | Report for a specific month |
+| `make set-limit NAME=x LIMIT=500000` | Set token quota (tokens/month), no restart needed |
+| `make quota-reset NAME=x` | Reset current-month counter |
 
-### Мониторинг
+### Monitoring
 
-| Команда | Описание |
+| Command | Description |
 |---|---|
-| `make monitor` | Текущие метрики CPU/RAM/диска |
-| `make monitor-alerts` | Активные алерты (с cooldown 1ч) |
+| `make monitor` | Current CPU/RAM/disk metrics |
+| `make monitor-alerts` | Active alerts (1h cooldown) |
 
 ### Service Agent
 
-| Команда | Описание |
+| Command | Description |
 |---|---|
-| `make service-health` | Healthcheck service-agent |
-| `make service-skills` | Список доступных скиллов |
-| `make add-service NAME=x PORT=y SKILLS=z` | Добавить реплику service-agent |
+| `make service-health` | Service-agent healthcheck |
+| `make service-skills` | List available skills |
+| `make add-service NAME=x PORT=y SKILLS=z` | Add a service-agent replica |
 
-### Безопасность
+### Security
 
-| Команда | Описание |
+| Command | Description |
 |---|---|
-| `make security-check` | Проверка прав `.env`, наличия ключей, gitignore |
+| `make security-check` | Verify `.env` permissions, key presence, gitignore |
 
 ---
 
-## Квоты токенов
+## Token Quotas
 
 ```
-📊 Отчёт по токенам (2026-02):
+📊 Token report (2026-02):
 
-  nikita       823,451 / 1,000,000 токенов  ⚠️ warning  ████████████████
+  nikita       823,451 / 1,000,000 tokens  ⚠️ warning  ████████████████
                in=641,203  out=182,248  reqs=1,847
 
-  alexey       312,008 /   500,000 токенов  ✅ ok  ██████
+  alexey       312,008 /   500,000 tokens  ✅ ok  ██████
                in=241,500  out=70,508   reqs=892
 
-  dmitry        45,100 /   500,000 токенов  ✅ ok  █
+  dmitry        45,100 /   500,000 tokens  ✅ ok  █
                in=38,200   out=6,900    reqs=203
 ```
 
-- **⚠️ warning** при 80% — можно добавить alert
-- **❌ exceeded** при 100% — инстанс получает 429 и сообщает пользователю
-- Лимит можно менять **без рестарта**: `make set-limit NAME=alexey LIMIT=1000000`
+- **⚠️ warning** at 80% — add alerting as needed
+- **❌ exceeded** at 100% — instance receives 429, notifies the user
+- Limits can be changed **without restart**: `make set-limit NAME=alexey LIMIT=1000000`
 
 ---
 
-## Структура репозитория
+## Repository Structure
 
 ```
 corp-assistant/
-├── quota-proxy/          # единственное место с ANTHROPIC_API_KEY
-│   ├── proxy.py          # HTTP-прокси, SQLite quota + audit log
+├── quota-proxy/          # sole holder of ANTHROPIC_API_KEY
+│   ├── proxy.py          # HTTP proxy, SQLite quota + audit log
 │   └── Dockerfile
-├── broker/               # шина сообщений между ассистентами
+├── broker/               # message bus between assistants
 │   └── broker.py
-├── resource-monitor/     # мониторинг CPU/RAM/диска, HTTP API
+├── resource-monitor/     # CPU/RAM/disk monitoring, HTTP API
 │   ├── monitor.py
 │   └── Dockerfile
-├── service-agent/        # HTTP API для бэкенд-сервисов
-│   ├── server.py         # /v1/run /v1/skills /v1/usage
-│   ├── skills/           # compliance/ и другие скиллы
+├── service-agent/        # HTTP API for backend services
+│   ├── server.py         # /v1/run  /v1/skills  /v1/usage
+│   ├── skills/           # compliance/ and other skills
 │   └── Dockerfile
 ├── instances/
-│   ├── admin/            # Приор — единственный с /infra доступом
-│   ├── _template/        # шаблон нового инстанса
-│   └── .env.example      # шаблон .env для инстанса
+│   ├── admin/            # Prior — sole instance with /infra access
+│   ├── _template/        # new-instance template
+│   └── .env.example      # instance .env template
 ├── shared/
 │   └── skills/
-│       └── corp-messenger/  # скилл для обмена сообщениями
+│       └── corp-messenger/  # inter-instance messaging skill
 ├── scripts/
-│   ├── add-user.sh       # онбординг: генерирует ключи, копирует шаблон
-│   ├── remove-user.sh    # удаление инстанса с архивом
-│   ├── quota.sh          # CLI управления квотами
-│   ├── monitor.sh        # CLI мониторинга
-│   ├── add-service.sh    # добавить реплику service-agent
-│   └── backup.sh         # бэкап воркспейсов
-├── docs/                 # документация
+│   ├── add-user.sh       # onboarding: generates keys, copies template
+│   ├── remove-user.sh    # remove instance with workspace archive
+│   ├── quota.sh          # quota management CLI
+│   ├── monitor.sh        # monitoring CLI
+│   ├── add-service.sh    # add service-agent replica
+│   └── backup.sh         # workspace backup
+├── docs/                 # documentation (see below)
 ├── .github/
-│   └── workflows/        # CI: security (Semgrep, CodeQL, Trivy, Gitleaks)
-│                         #     release-please, GitHub Releases
+│   └── workflows/        # CI: security, release-please, GitHub Releases
 └── docker-compose.yml
 ```
 
@@ -189,25 +192,26 @@ corp-assistant/
 
 ## CI / CD
 
-GitHub Actions автоматически запускает при каждом пуше и PR:
+GitHub Actions runs automatically on every push and PR:
 
-| Workflow | Что делает |
+| Workflow | What it does |
 |---|---|
-| `security.yml` | Semgrep SAST + custom AI-rules, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck, pip-audit |
-| `release-please.yml` | Создаёт Release PR при мёрдже в `master`, обновляет `CHANGELOG.md` и `VERSION` |
-| `release.yml` | При теге `v*.*.*` создаёт GitHub Release с release notes |
+| `security.yml` | Semgrep SAST + custom AI rules, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck, pip-audit |
+| `release-please.yml` | Opens a Release PR on merge to `master`, updates `CHANGELOG.md` and `VERSION` |
+| `release.yml` | Creates a GitHub Release with release notes on `v*.*.*` tag push |
+| `lint-commits.yml` | Enforces Conventional Commits on PR titles and commit messages |
 
-Текущая версия: см. [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/rekurt/corp-assistant/releases)
+Current version: see [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/rekurt/corp-assistant/releases)
 
 ---
 
-## Документация
+## Documentation
 
-| Документ | Описание |
+| Document | Description |
 |---|---|
-| [docs/SETUP.md](docs/SETUP.md) | Установка на чистый сервер (Ubuntu 24.04) |
-| [docs/ONBOARDING.md](docs/ONBOARDING.md) | Онбординг нового сотрудника |
-| [docs/PERSONAS.md](docs/PERSONAS.md) | Создание персонажей (SOUL.md / IDENTITY.md) |
-| [docs/MESSAGING.md](docs/MESSAGING.md) | Межинстансный мессенджер |
-| [docs/SERVICE_AGENT.md](docs/SERVICE_AGENT.md) | HTTP API для бэкенд-сервисов |
-| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, исправленные уязвимости, hardening |
+| [docs/SETUP.md](docs/SETUP.md) | Installation on a clean server (Ubuntu 24.04) |
+| [docs/ONBOARDING.md](docs/ONBOARDING.md) | Onboarding a new employee |
+| [docs/PERSONAS.md](docs/PERSONAS.md) | Creating personas (SOUL.md / IDENTITY.md) |
+| [docs/MESSAGING.md](docs/MESSAGING.md) | Inter-instance messaging |
+| [docs/SERVICE_AGENT.md](docs/SERVICE_AGENT.md) | HTTP API for backend services |
+| [docs/SECURITY.md](docs/SECURITY.md) | Threat model, patched vulnerabilities, hardening |
