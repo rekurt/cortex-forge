@@ -94,6 +94,7 @@ services:
     networks:
       - corp-internal
       - corp-admin
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -130,6 +131,7 @@ services:
   #     - BROKER_KEY=${BROKER_KEY_NIKITA}
   #   networks:
   #     - corp-internal   # broker + quota-proxy, но НЕ corp-admin
+  #     - corp-outbound   # Telegram API + внешние вызовы
   #   security_opt:
   #     - no-new-privileges:true
   #   deploy:
@@ -250,3 +252,9 @@ networks:
   corp-egress:
     driver: bridge
     # Нет internal: true — quota-proxy форвардит запросы в api.anthropic.com
+
+  # Сеть для внешних API инстансов (Telegram, etc.)
+  # Anthropic-запросы всё равно идут через quota-proxy (QUOTA_KEY не работает напрямую)
+  corp-outbound:
+    driver: bridge
+    # Нет internal: true — инстансы могут ходить в Telegram API и др.
