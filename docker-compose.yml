@@ -14,8 +14,8 @@ services:
       - QUOTA_PORT=9090
     volumes:
       - quota-data:/data
-    # ⚠️ Порт НЕ пробрасывается наружу — только внутри corp-internal
-    # Управление квотами — только через admin-контейнер
+    ports:
+      - "127.0.0.1:9090:9090"   # quota dashboard — только localhost
     # corp-egress нужен для форвардинга запросов в api.anthropic.com
     networks:
       - corp-internal
@@ -161,6 +161,8 @@ services:
     volumes:
       - monitor-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:9091:9091"   # monitor dashboard — только localhost
     networks:
       - corp-internal
       - corp-admin
