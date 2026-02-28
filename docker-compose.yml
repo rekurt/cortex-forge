@@ -84,6 +84,7 @@ services:
       - ./instances/admin/openclaw_data:/home/node/.openclaw
       - ./shared/skills:/shared/skills:ro
       - ./:/infra                            # весь проект — для add-user.sh и make deploy
+      - ./:/home/node/.openclaw/workspace/infra  # проект внутри workspace — write tool работает
       - /var/run/docker.sock:/var/run/docker.sock  # docker CLI для управления инстансами
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
