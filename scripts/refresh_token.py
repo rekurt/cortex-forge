@@ -1,102 +1,112 @@
 #!/usr/bin/env python3
 """
-Обновляет Anthropic OAuth токен через refreshToken и перезапускает контейнеры.
-Запускается кроном за 7 дней до истечения.
+Автообновление Anthropic OAuth токена для CortexForge.
+Endpoint: https://api.anthropic.com/v1/oauth/token
+Токен живёт 8 часов — обновляем за 1 час до истечения.
 """
 import json, re, subprocess, urllib.request, urllib.error, pathlib, sys, time
 
 TOKEN_FILE = pathlib.Path("/opt/cortex-forge/.anthropic_tokens.json")
-ENV_FILE   = pathlib.Path("/opt/cortex-forge/.env")
+COMPOSE    = "/opt/cortex-forge"
 INSTANCES  = ["admin", "user-1", "user-3", "user-4"]
 SERVICES   = ["assistant-admin", "assistant-user-1", "assistant-user-3", "assistant-user-4"]
-COMPOSE    = "/opt/cortex-forge"
 
-def load_tokens():
+ENDPOINT  = "https://api.anthropic.com/v1/oauth/token"
+CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+
+# Обновляем если < 3600 секунд (1 час) до истечения
+REFRESH_THRESHOLD = 3600
+
+
+def load():
     return json.loads(TOKEN_FILE.read_text())
 
-def save_tokens(data):
+
+def save(data):
     TOKEN_FILE.write_text(json.dumps(data, indent=2))
     TOKEN_FILE.chmod(0o600)
 
-def token_expires_soon(tokens, days=7):
+
+def needs_refresh(tokens):
     expires_ms = tokens.get("expiresAt", 0)
     remaining  = (expires_ms / 1000) - time.time()
-    print(f"Токен истекает через {remaining/86400:.1f} дней")
-    return remaining < days * 86400
+    hours = remaining / 3600
+    print(f"Токен истекает через {hours:.1f}ч")
+    return remaining < REFRESH_THRESHOLD
 
-def refresh(tokens):
-    refresh_token = tokens["refreshToken"]
-    # Пробуем несколько возможных endpoint-ов
-    endpoints = [
-        "https://claude.ai/api/auth/oauth/token",
-        "https://api.anthropic.com/oauth/token",
-    ]
+
+def do_refresh(refresh_token):
     payload = json.dumps({
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token
+        "grant_type":    "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id":     CLIENT_ID,
     }).encode()
 
-    for url in endpoints:
-        try:
-            req = urllib.request.Request(url, data=payload,
-                headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=15) as r:
-                data = json.loads(r.read())
-                print(f"Refreshed via {url}")
-                return data
-        except Exception as e:
-            print(f"  {url}: {e}")
-    raise RuntimeError("Все endpoint-ы не ответили")
+    req = urllib.request.Request(
+        ENDPOINT, data=payload,
+        headers={
+            "Content-Type":       "application/json",
+            "anthropic-version":  "2023-06-01",
+            "User-Agent":         "claude-code/2.1.63",
+        },
+        method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        return json.loads(r.read())
+
 
 def update_env(new_token):
-    for path in [ENV_FILE] + [
+    paths = [pathlib.Path("/opt/cortex-forge/.env")] + [
         pathlib.Path(f"/opt/cortex-forge/instances/{n}/.env") for n in INSTANCES
-    ]:
-        if not path.exists():
+    ]
+    for p in paths:
+        if not p.exists():
             continue
-        content = path.read_text()
-        content = re.sub(
+        c = p.read_text()
+        c = re.sub(
             r"ANTHROPIC_API_KEY=sk-ant-[^\n]+",
             f"ANTHROPIC_API_KEY={new_token}",
-            content
+            c
         )
-        path.write_text(content)
-    print("Все .env обновлены")
+        p.write_text(c)
+    print("✅ Все .env обновлены")
 
-def restart_containers():
+
+def restart():
     subprocess.run(
         ["docker", "compose", "up", "-d"] + SERVICES,
         cwd=COMPOSE, check=True, capture_output=True
     )
-    print("Контейнеры перезапущены")
+    print("✅ Контейнеры перезапущены")
+
 
 if __name__ == "__main__":
-    tokens = load_tokens()
+    tokens = load()
 
     force = "--force" in sys.argv
-    if not force and not token_expires_soon(tokens):
-        print("Токен ещё свежий, ничего делать не нужно")
+    if not force and not needs_refresh(tokens):
+        print("Токен свежий, ничего делать не нужно")
         sys.exit(0)
 
     print("Обновляем токен...")
     try:
-        result = refresh(tokens)
-        new_access  = result.get("access_token") or result.get("accessToken")
-        new_refresh = result.get("refresh_token") or result.get("refreshToken")
-        new_expires = result.get("expires_in") and (time.time() + result["expires_in"]) * 1000 \
-                      or result.get("expiresAt")
+        result = do_refresh(tokens["refreshToken"])
 
-        if new_access:
-            tokens["accessToken"]  = new_access
-            tokens["refreshToken"] = new_refresh or tokens["refreshToken"]
-            tokens["expiresAt"]    = new_expires or tokens["expiresAt"]
-            save_tokens(tokens)
-            update_env(new_access)
-            restart_containers()
-            print("Готово!")
-        else:
-            print("Ответ не содержит нового токена:", result)
-            sys.exit(1)
+        new_access  = result["access_token"]
+        new_refresh = result.get("refresh_token", tokens["refreshToken"])
+        expires_in  = result.get("expires_in", 28800)
+
+        tokens["accessToken"]  = new_access
+        tokens["refreshToken"] = new_refresh
+        tokens["expiresAt"]    = int((time.time() + expires_in) * 1000)
+        save(tokens)
+
+        update_env(new_access)
+        restart()
+
+        hours = expires_in / 3600
+        print(f"✅ Токен обновлён, истекает через {hours:.0f}ч")
+
     except Exception as e:
-        print(f"Ошибка: {e}")
+        print(f"❌ Ошибка: {e}")
         sys.exit(1)
