@@ -36,5 +36,15 @@
   "commands": {
     "native": "auto",
     "nativeSkills": "auto"
+  },
+  "skills": {
+    "entries": {
+      "openai-whisper-api": {
+        "apiKey": "${OPENAI_API_KEY}"
+      },
+      "openai-image-gen": {
+        "apiKey": "${OPENAI_API_KEY}"
+      }
+    }
   }
 }
