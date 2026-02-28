@@ -48,18 +48,5 @@
         "apiKey": "${OPENAI_API_KEY}"
       }
     }
-  },
-  "mcpServers": {
-    "dadata": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "supergateway",
-        "--streamableHttp",
-        "https://mcp.dadata.ru/mcp",
-        "--oauth2Bearer",
-        "${DADATA_API_KEY}:${DADATA_SECRET}"
-      ]
-    }
   }
 }
