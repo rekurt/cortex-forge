@@ -39,3 +39,8 @@ shared/skills/corp-greeting/.greeting_counter
 # Migration state per instance (local)
 instances/*/.migrations_applied
 instances/*/openclaw_data/.migrations_applied
+
+# User instance workspace files (personal runtime data, not tracked)
+instances/*/workspace/
+!instances/admin/workspace/
+!instances/_template/workspace/

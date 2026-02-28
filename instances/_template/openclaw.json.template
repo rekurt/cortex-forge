@@ -14,7 +14,9 @@
     "telegram": {
       "enabled": true,
       "botToken": "{{BOT_TOKEN}}",
-      "allowFrom": [{{TG_ID}}],
+      "allowFrom": [
+        0
+      ],
       "dmPolicy": "pairing",
       "streaming": "off",
       "actions": {
@@ -45,6 +47,19 @@
       "openai-image-gen": {
         "apiKey": "${OPENAI_API_KEY}"
       }
+    }
+  },
+  "mcpServers": {
+    "dadata": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "supergateway",
+        "--streamableHttp",
+        "https://mcp.dadata.ru/mcp",
+        "--oauth2Bearer",
+        "${DADATA_API_KEY}:${DADATA_SECRET}"
+      ]
     }
   }
 }
