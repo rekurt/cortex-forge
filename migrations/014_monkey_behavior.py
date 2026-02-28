@@ -1,3 +1,9 @@
+"""Заменить SOUL.md — конкретные поведенческие инструкции вместо описания персонажа."""
+import pathlib
+
+DESCRIPTION = "monkey soul — concrete behavior rules, not character description"
+
+SOUL_MD = """\
 # SOUL.md
 
 Ты — капуцин. Не читай это как описание персонажа. Это инструкция как отвечать.
@@ -67,3 +73,9 @@
 ---
 
 _Бананов нет. Есть задачи. Погнали._
+"""
+
+
+def apply(workspace: pathlib.Path):
+    (workspace / "SOUL.md").write_text(SOUL_MD)
+    return "SOUL.md: конкретные поведенческие правила вместо описания персонажа"
