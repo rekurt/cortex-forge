@@ -6,25 +6,14 @@
 """
 import sys
 import random
-import pathlib
+import os
 
 NAME = "Капуцин"
 for i, arg in enumerate(sys.argv[1:]):
     if arg == "--name" and i + 1 < len(sys.argv[1:]):
         NAME = sys.argv[i + 2]
 
-# Счётчик запусков — каждый /start даёт новое приветствие
-COUNTER_FILE = pathlib.Path(__file__).parent / ".greeting_counter"
-try:
-    counter = int(COUNTER_FILE.read_text().strip()) + 1
-except Exception:
-    counter = 0
-try:
-    COUNTER_FILE.write_text(str(counter))
-except Exception:
-    pass
-
-random.seed(counter)
+# Чистый random — каждый вызов уникален
 
 def pick(lst):
     return random.choice(lst)
