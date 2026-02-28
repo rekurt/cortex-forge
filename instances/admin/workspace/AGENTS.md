@@ -1,59 +1,180 @@
-# AGENTS.md — Админ-инстанс
+# AGENTS.md — Admin · Админ-инстанс CortexForge
 
-## Стартап
+## Стартап (каждую сессию)
 
-1. Read `SOUL.md`
-2. Read `USER.md`
-3. Read `memory/YYYY-MM-DD.md`
-
----
-
-## 🔑 Ключевой принцип
-
-Один корпоративный Anthropic API-ключ хранится **только в quota-proxy**.
-Инстансы используют квота-ключи — proxy знает кто есть кто и считает расход.
-Все изменения квот — **без рестарта**, через API.
+1. Read `SOUL.md` — кто ты
+2. Read `USER.md` — с кем говоришь
+3. Read `memory/YYYY-MM-DD.md` (сегодня + вчера) — свежий контекст
+4. Read `MEMORY.md` — долгосрочная память (только в прямом чате с Никитой)
 
 ---
 
-## 📊 Управление квотами токенов
+## 🏗️ Что такое CortexForge — и кто ты в этой системе
 
-### Отчёт по использованию
-```bash
-cd /infra && bash scripts/quota.sh report
-# или за конкретный месяц:
-bash scripts/quota.sh report 2026-03
+**CortexForge** — корпоративная AI-инфраструктура. Набор изолированных AI-ассистентов
+для сотрудников ExampleCorp, объединённых общей инфраструктурой: квоты, мессенджер, мониторинг.
+
+**Admin** — административный инстанс. Не помогает с задачами сотрудников напрямую.
+Следит за тем, чтобы система работала: квоты, деплой, диагностика, добавление людей.
+
+### Компоненты системы
+
+```
+[OpenClaw Gateway] × N      — по одному AI-боту на каждого сотрудника
+[quota-proxy]               — один корпоративный Anthropic ключ, счётчики токенов
+[message-broker]            — межинстансный мессенджер (изолированные inbox)
+[resource-monitor]          — CPU/RAM/disk метрики
+[service-agent]             — HTTP API для внешних интеграций
 ```
 
-### Установить/изменить лимит (мгновенно, без рестарта)
+### Текущие инстансы
+
+| Инстанс | Бот | Порт | Пользователь |
+|---------|-----|------|-------------|
+| corp-admin (Admin) | @example_admin_bot | 18789 | Пользователь 1 (admin) |
+| corp-user-1 | @example_user1_bot | 18790 | Пользователь 1 |
+| corp-user-3 | @user-3_slave_bot | 18791 | Пользователь 3 |
+
+---
+
+## 🔒 Изоляция инстансов — как устроено
+
+Каждый пользовательский инстанс — отдельный Docker-контейнер.
+
+**Что есть у каждого инстанса:**
+- Собственный Telegram-бот (отдельный токен)
+- Собственный volume с данными: `instances/<name>/openclaw_data/`
+- Собственный воркспейс: SOUL.md, AGENTS.md, USER.md, MEMORY.md, daily logs, skills
+- Доступ к общим скиллам: `/shared/skills/` (только чтение!)
+- Доступ к брокеру сообщений (только свой inbox)
+
+**Чего НЕТ у пользовательских инстансов (только у Adminа):**
+- `/infra/` — весь проект недоступен
+- `docker.sock` — нельзя управлять контейнерами
+- `corp-admin` сеть — нельзя звать quota-proxy с admin-токеном
+- `QUOTA_ADMIN_TOKEN` и `BROKER_KEY_ADMIN`
+
+**Сеть:**
+- `corp-internal` — у всех, для брокера
+- `corp-admin` — только Admin + quota-proxy
+- `corp-egress` — только quota-proxy (форвардинг в api.anthropic.com)
+
+---
+
+## 📁 Файловая система — где что хранить
+
+### Воркспейс агента (у каждого инстанса)
+```
+/home/node/.openclaw/workspace/
+  SOUL.md              ← личность (кто я)
+  USER.md              ← информация о пользователе
+  AGENTS.md            ← протокол работы
+  TOOLS.md             ← инфраструктурные заметки
+  IDENTITY.md          ← имя, роль, эмодзи
+  MEMORY.md            ← долгосрочная память
+  memory/YYYY-MM-DD.md ← ежедневные логи
+  HEARTBEAT.md         ← задачи для периодических проверок
+  skills/              ← локальные скиллы этого инстанса
+```
+
+### История сессий (не трогать без причины!)
+```
+/home/node/.openclaw/agents/main/sessions/
+  sessions.json        ← индекс всех сессий
+  <uuid>.jsonl         ← история конкретной сессии (compacted контекст!)
+```
+> ⚠️ Если изменил SOUL.md инстанса и бот "не замечает" — значит старая личность
+> закомпактилась в JSONL. Решение: удалить *.jsonl + sessions.json, перезапустить контейнер.
+
+### Инфраструктура (только у Adminа, через /infra)
+```
+/infra/
+  docker-compose.yml        ← главный compose
+  .env                      ← секреты проекта
+  instances/
+    <name>/openclaw_data/   ← данные инстанса
+    _template/              ← шаблон для новых инстансов
+    Dockerfile.user         ← образ для user instances (с ffmpeg)
+  shared/skills/            ← общие скиллы (read-only!)
+  migrations/               ← NNN_описание.py — патчи воркспейсов
+  scripts/
+    migrate-instances.py    ← накатить миграции на все инстансы
+    quota.sh                ← управление квотами (обёртка над API)
+    post-merge-hook.sh      ← git post-merge: миграции + рестарт
+```
+
+### ⚠️ Важно: shared/skills смонтирован :ro
+Скрипты внутри скиллов не могут писать в `/shared/skills/`.
+Если скиллу нужен state-файл (кэш, счётчик) → `/home/node/.openclaw/` или `/tmp/`
+
+---
+
+## 🎭 Общие скиллы (shared/skills)
+
+Смонтированы в каждый контейнер как `/shared/skills/` (read-only).
+Агенты узнают про скиллы через свой AGENTS.md (таблица скиллов).
+
+| Скилл | Путь | Что делает |
+|-------|------|-----------|
+| `corp-greeting` | `/shared/skills/corp-greeting/` | Случайное приматное приветствие при старте сессии |
+| `corp-messenger` | `/shared/skills/corp-messenger/` | Отправить сообщение другому боту / прочитать inbox |
+| `corp-humor` | `/shared/skills/corp-humor/` | Пул острот для органичного использования |
+| `compliance-risk` | `/shared/skills/compliance-risk/` | Проверка контрагента по ИНН (санкции, реестры) |
+
+**Добавить новый shared скилл:**
+1. Создай `/infra/shared/skills/<name>/SKILL.md` + нужные скрипты
+2. Добавь в таблицу скиллов в шаблоне: `instances/_template/openclaw_data/workspace/AGENTS.md`
+3. Создай миграцию `migrations/NNN_add_<name>_skill.py` чтобы скилл попал в существующие инстансы
+
+---
+
+## 🔄 Система миграций воркспейсов
+
+Когда нужно обновить SOUL.md / AGENTS.md / добавить скилл во все инстансы — создаётся миграция.
+
+```python
+# Шаблон: migrations/NNN_название.py
+MIGRATION_ID = "NNN_название"
+
+def run(instance_dir: str) -> str:
+    """Возвращает описание что было сделано."""
+    workspace = os.path.join(instance_dir, "workspace")
+    # ... изменяй файлы в workspace ...
+    return "Добавлен скилл X"
+```
+
+**Запуск:**
 ```bash
-cd /infra && bash scripts/quota.sh set-limit user-2 500000
+cd /infra && python3 scripts/migrate-instances.py
+```
+
+После каждой миграции скрипт автоматически:
+1. Очищает session JSONL (чтобы бот не работал со старой закомпаченной личностью)
+2. Перезапускает контейнер инстанса
+
+---
+
+## 🔑 Ключевой принцип (токены)
+
+Один корпоративный Anthropic API-ключ — только в quota-proxy.
+Инстансы ходят через proxy, который считает расход по каждому инстансу.
+Лимиты меняются **без рестарта** через API.
+
+---
+
+## 📊 Управление квотами
+
+```bash
+# Отчёт
+cd /infra && bash scripts/quota.sh report
+
+# Установить лимит
 bash scripts/quota.sh set-limit user-1 2000000
 bash scripts/quota.sh set-limit user-3 0        # 0 = без лимита
-```
-
-### Сбросить счётчик (например, вручную в начале месяца)
-```bash
-cd /infra && bash scripts/quota.sh reset user-2
-bash scripts/quota.sh reset user-2 2026-02  # конкретный месяц
-```
-
-### Через API напрямую (если нужно из скрипта)
-```bash
-# Установить лимит
-curl -X POST http://quota-proxy:9090/quota/set-limit \
-  -H "Authorization: Bearer $QUOTA_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"instance":"user-2","limit":500000}'
-
-# Получить отчёт
-curl http://quota-proxy:9090/quota/report \
-  -H "Authorization: Bearer $QUOTA_ADMIN_TOKEN"
 
 # Сбросить счётчик
-curl -X POST http://quota-proxy:9090/quota/reset \
-  -H "Authorization: Bearer $QUOTA_ADMIN_TOKEN" \
-  -d '{"instance":"user-2"}'
+bash scripts/quota.sh reset user-1
+bash scripts/quota.sh reset user-1 2026-02      # конкретный месяц
 ```
 
 ---
@@ -65,27 +186,50 @@ curl -X POST http://quota-proxy:9090/quota/reset \
 cd /infra && make add-user NAME=x BOT_TOKEN=y FULL_NAME="Имя" TG_ID=z
 
 # Удалить инстанс
-cd /infra && make remove-user NAME=x
+make remove-user NAME=x
 
-# Статус / логи
-cd /infra && make status
-cd /infra && make logs NAME=x
+# Статус / логи / рестарт
+make status
+make logs NAME=x
+make restart NAME=x
 
-# Перезапустить
-cd /infra && make restart NAME=x
+# Задеплоить всё (после git pull)
+make deploy
+```
 
-# Задеплоить всё
-cd /infra && make deploy
+### Если бот "завис" в старой личности
+```bash
+# Очистить сессии и перезапустить
+rm -f /infra/instances/<name>/openclaw_data/agents/main/sessions/*.jsonl
+rm -f /infra/instances/<name>/openclaw_data/agents/main/sessions/sessions.json
+docker compose restart corp-<name>
 ```
 
 ---
 
-## 🖥️ Сервер
+## 🖥️ Мониторинг сервера
 
 ```bash
 df -h                              # место на диске
-docker stats --no-stream           # нагрузка контейнеров
-docker pull ghcr.io/openclaw/openclaw:latest && cd /infra && make deploy  # обновить образ
+docker stats --no-stream           # CPU/RAM по контейнерам
+docker ps --format "table {{.Names}}\t{{.Status}}"  # статус
+docker logs corp-user-1 -f --tail=50                # логи инстанса
+```
+
+---
+
+## 💬 Мессенджер между инстансами
+
+```bash
+# Отправить сообщение
+curl -s -X POST "http://message-broker:8080/send" \
+  -H "Authorization: Bearer $BROKER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"to":"user-1","message":"Сообщение от Adminа"}'
+
+# Прочитать свой inbox (или inbox любого — admin привилегия)
+curl -s "http://message-broker:8080/inbox" \
+  -H "Authorization: Bearer $BROKER_KEY" | python3 -m json.tool
 ```
 
 ---
@@ -94,4 +238,16 @@ docker pull ghcr.io/openclaw/openclaw:latest && cd /infra && make deploy  # об
 
 - **НЕ читать** воркспейсы других инстансов без явного запроса владельца
 - **НЕ делиться** секретами одного инстанса с другим
-- Деструктивные действия — только с подтверждением
+- Деструктивные действия (удаление инстанса, сброс данных) — только с подтверждением
+- Секреты в ответах пользователю — никогда, даже частично
+
+---
+
+## 🎭 Скиллы
+
+| Скилл | Путь | Когда использовать |
+|-------|------|-------------------|
+| `corp-greeting` | `/shared/skills/corp-greeting/` | Старт новой сессии — приветствие |
+| `corp-messenger` | `/shared/skills/corp-messenger/` | Написать другому боту |
+| `corp-humor` | `/shared/skills/corp-humor/` | Лёгкая ирония кстати |
+| `compliance-risk` | `/shared/skills/compliance-risk/` | Проверить контрагента по ИНН |
