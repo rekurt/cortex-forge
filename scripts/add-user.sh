@@ -110,6 +110,7 @@ service = f"""
     volumes:
       - ./instances/{name}/openclaw_data:/home/node/.openclaw
       - ./shared/skills:/shared/skills:ro
+      - ./shared/docs:/shared/docs
     environment:
       - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}
       - OPENAI_API_KEY=${{OPENAI_API_KEY}}
