@@ -1,29 +1,56 @@
 #!/usr/bin/env bash
-# Автообновление CortexForge — запускается кроном каждые 5 минут.
-# git pull → post-merge hook → миграции → рестарт изменившихся контейнеров.
-set -e
+# Полное автообновление CortexForge — запускается кроном каждые 5 минут.
+#
+# Логика:
+#   1. git pull  → post-merge hook сам делает миграции + рестарт изменившихся контейнеров
+#   2. docker pull → если образы обновились — up -d пересоздаёт контейнеры с новыми образами
+#
+# Двойного рестарта нет: hook трогает только контейнеры с изменившимся кодом,
+# up -d трогает только контейнеры с обновившимися образами.
+
+set -euo pipefail
 
 REPO=/opt/cortex-forge
-LOG=/opt/cortex-forge/logs/autoupdate.log
+LOG=$REPO/logs/autoupdate.log
+LOCK=$REPO/logs/autoupdate.lock
 
-mkdir -p "$(dirname "$LOG")"
+mkdir -p "$REPO/logs"
+
+# Лок — не запускаем параллельно
+exec 9>"$LOCK"
+if ! flock -n 9; then
+  exit 0  # уже запущен
+fi
 
 cd "$REPO"
 
-# Проверяем есть ли обновления
-git fetch origin master --quiet 2>&1
+log() { echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') $*" | tee -a "$LOG"; }
+
+# ── 1. Git ────────────────────────────────────────────────────────────────────
+git fetch origin master -q
 
 LOCAL=$(git rev-parse HEAD)
 REMOTE=$(git rev-parse origin/master)
 
-if [ "$LOCAL" = "$REMOTE" ]; then
-  # Нет обновлений — тихо выходим
+if [ "$LOCAL" != "$REMOTE" ]; then
+  log "📦 Код: $(git log --oneline "$LOCAL".."$REMOTE" | head -3)"
+  # git pull запускает post-merge hook → миграции + рестарт затронутых контейнеров
+  git pull origin master 2>&1 | tee -a "$LOG"
+  git submodule update --remote --recursive -q 2>&1 | tee -a "$LOG"
+fi
+
+# ── 2. Docker образы ──────────────────────────────────────────────────────────
+PULLED=$(docker compose pull 2>&1)
+if echo "$PULLED" | grep -q "Pulled"; then
+  log "🐳 Новые образы — пересоздаём контейнеры..."
+  echo "$PULLED" | grep "Pulled" | tee -a "$LOG"
+  docker compose up -d --remove-orphans 2>&1 | tee -a "$LOG"
+  log "✅ Контейнеры пересозданы с новыми образами"
+fi
+
+# ── 3. Если всё без изменений — тихий выход ──────────────────────────────────
+if [ "$LOCAL" = "$REMOTE" ] && ! echo "$PULLED" | grep -q "Pulled"; then
   exit 0
 fi
 
-echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') [autoupdate] Обновление: $LOCAL → $REMOTE" | tee -a "$LOG"
-
-# git pull запускает post-merge hook автоматически
-git pull origin master 2>&1 | tee -a "$LOG"
-
-echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') [autoupdate] Готово" | tee -a "$LOG"
+log "✅ Готово"
