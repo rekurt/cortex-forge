@@ -407,11 +407,18 @@ class Handler(BaseHTTPRequestHandler):
             self._json(413, {"error": "Request body too large (max 1MB)"}); return
 
         headers = {
-            "x-api-key":         REAL_API_KEY,
+            **({"Authorization": f"Bearer {REAL_API_KEY}"} if REAL_API_KEY.startswith("sk-ant-oat") else {"x-api-key": REAL_API_KEY}),
             "anthropic-version": self.headers.get("anthropic-version", "2023-06-01"),
             "content-type":      self.headers.get("content-type", "application/json"),
         }
-        if v := self.headers.get("anthropic-beta"):
+        # При OAuth-ключе добавляем обязательные беты (oauth-2025-04-20, claude-code-20250219)
+        if REAL_API_KEY.startswith("sk-ant-oat"):
+            oauth_betas = ["claude-code-20250219", "oauth-2025-04-20"]
+            existing = self.headers.get("anthropic-beta", "")
+            existing_list = [b.strip() for b in existing.split(",") if b.strip()]
+            all_betas = list(dict.fromkeys(oauth_betas + existing_list))  # deduplicate, oauth first
+            headers["anthropic-beta"] = ",".join(all_betas)
+        elif v := self.headers.get("anthropic-beta"):
             headers["anthropic-beta"] = v
 
         try:
