@@ -83,6 +83,8 @@ _broker_rl = RateLimiter(rate=0.17, capacity=10)
 # ── SQLite ─────────────────────────────────────────────────────────────────
 _db_lock = threading.Lock()
 
+def _now(): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
 def _init_db() -> sqlite3.Connection:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -162,8 +164,6 @@ def _drop_privileges(user: str = "app"):
 
 _drop_privileges()   # ← вызываем ДО открытия БД (чтобы открыть с правильным uid)
 _conn = _init_db()
-
-def _now(): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 def _audit(action: str, actor: str, target: str = None, detail: str = None):
     with _db_lock:

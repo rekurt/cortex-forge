@@ -26,11 +26,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health', timeout=3)"]
@@ -55,11 +50,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    deploy:
-      resources:
-        limits:
-          cpus: "0.3"
-          memory: 128M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
@@ -76,8 +66,8 @@ services:
     restart: unless-stopped
     env_file: instances/admin/.env
     volumes:
-      - ./instances/admin/workspace:/home/user/.openclaw/workspace
-      - ./instances/admin/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+      - ./instances/admin/openclaw_data:/home/node/.openclaw
+      - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
       - ./shared/skills:/shared/skills:ro
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
       - ./instances:/infra/instances         # воркспейсы инстансов
@@ -92,14 +82,10 @@ services:
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
     networks:
       - corp-internal
+      - corp-egress
       - corp-admin
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -118,13 +104,12 @@ services:
   #   restart: unless-stopped
   #   env_file: instances/user-1/.env
   #   volumes:
-  #     - ./instances/user-1/workspace:/home/user/.openclaw/workspace
-  #     - ./instances/user-1/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+  #     - ./instances/user-1/workspace:/home/node/.openclaw/workspace
+  #     - ./instances/user-1/openclaw.json:/home/node/.openclaw/openclaw.json
   #     - ./shared/skills:/shared/skills:ro
   #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
   #   environment:
-  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}     # квота-ключ, не реальный
-  #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}     # квота-ключ, не реальный
   #     - BROKER_URL=http://message-broker:8080
   #     - BROKER_KEY=${BROKER_KEY_USER_1}
   #   networks:
@@ -135,7 +120,7 @@ services:
   #     resources:
   #       limits:
   #         cpus: "1.0"
-  #         memory: 512M
+  #         memory: 1G
   #   depends_on:
   #     quota-proxy:
   #       condition: service_healthy
@@ -163,11 +148,6 @@ services:
       - corp-admin
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "0.3"
-          memory: 128M
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -209,17 +189,101 @@ services:
       - corp-services
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 1G
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8090/v1/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  assistant-user-1:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-user-1
+    restart: unless-stopped
+    env_file:
+      - instances/user-1/.env
+    volumes:
+      - ./instances/user-1/openclaw_data:/home/node/.openclaw
+      - ./shared/skills:/shared/skills:ro
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_USER_1}
+    networks:
+      - corp-internal
+      - corp-egress
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    labels:
+      corp.assistant.role: personal
+      corp.assistant.user: user-1
+
+  assistant-user-4:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-user-4
+    restart: unless-stopped
+    env_file:
+      - instances/user-4/.env
+    volumes:
+      - ./instances/user-4/openclaw_data:/home/node/.openclaw
+      - ./shared/skills:/shared/skills:ro
+    environment:
+      - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_4}
+      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_USER_4}
+    networks:
+      - corp-internal
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1.2G
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    labels:
+      corp.assistant.role: personal
+      corp.assistant.user: user-4
+
+  assistant-user-3:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-user-3
+    restart: unless-stopped
+    env_file:
+      - instances/user-3/.env
+    volumes:
+      - ./instances/user-3/openclaw_data:/home/node/.openclaw
+      - ./shared/skills:/shared/skills:ro
+    environment:
+      - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_3}
+      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_USER_3}
+    networks:
+      - corp-internal
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1.2G
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    labels:
+      corp.assistant.role: personal
+      corp.assistant.user: user-3
 
 volumes:
   quota-data:
