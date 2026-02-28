@@ -44,3 +44,4 @@ instances/*/openclaw_data/.migrations_applied
 instances/*/workspace/
 !instances/admin/workspace/
 !instances/_template/workspace/
+*.lock
