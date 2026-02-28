@@ -77,6 +77,16 @@ def run():
                 print(f"    ❌ {mid}: {e}")
         if instance_updated:
             updated.append(instance_dir.name)
+            # Сбрасываем кеш сессий — иначе агент продолжит работать
+            # со старым SOUL.md/AGENTS.md из закешированной истории
+            sessions_dir = instance_dir / "openclaw_data" / "agents" / "main" / "sessions"
+            if sessions_dir.exists() and not DRY_RUN:
+                for f in sessions_dir.glob("*.jsonl"):
+                    f.unlink()
+                sess_json = sessions_dir / "sessions.json"
+                if sess_json.exists():
+                    sess_json.unlink()
+                print(f"  [{instance_dir.name}] 🗑️  сессии сброшены")
 
     return updated
 
