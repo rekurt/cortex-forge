@@ -99,7 +99,10 @@ OVERRIDE = "docker-compose.override.yml"
 
 service = f"""
   assistant-{name}:
-    image: ghcr.io/openclaw/openclaw:latest
+    build:
+      context: .
+      dockerfile: instances/Dockerfile.user
+    image: cortex-forge-user:latest
     container_name: corp-{name}
     restart: unless-stopped
     env_file:
@@ -108,8 +111,8 @@ service = f"""
       - ./instances/{name}/openclaw_data:/home/node/.openclaw
       - ./shared/skills:/shared/skills:ro
     environment:
-      - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
-      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+      - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}
+      - OPENAI_API_KEY=${{OPENAI_API_KEY}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
       - NODE_OPTIONS=--max-old-space-size=1024
