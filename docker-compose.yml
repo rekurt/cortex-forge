@@ -206,7 +206,8 @@ services:
       - ./instances/user-1/openclaw_data:/home/node/.openclaw
       - ./shared/skills:/shared/skills:ro
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}
+      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_USER_1}
     networks:
@@ -239,12 +240,9 @@ services:
       - BROKER_KEY=${BROKER_KEY_USER_4}
     networks:
       - corp-internal
+      - corp-egress
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1.2G
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -270,12 +268,9 @@ services:
       - BROKER_KEY=${BROKER_KEY_USER_3}
     networks:
       - corp-internal
+      - corp-egress
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1.2G
     depends_on:
       quota-proxy:
         condition: service_healthy
