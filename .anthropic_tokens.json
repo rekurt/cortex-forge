@@ -1,0 +1,7 @@
+{
+  "accessToken": "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",
+  "refreshToken": "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",
+  "expiresAt": 1772301955268,
+  "clientId": "9d1c250a-e61b-44d9-88ed-5944d1962f5e",
+  "endpoint": "https://api.anthropic.com/v1/oauth/token"
+}
