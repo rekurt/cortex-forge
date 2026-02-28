@@ -33,9 +33,11 @@ def mark_applied(workspace, migration_id):
     f.write_text("\n".join(sorted(applied)) + "\n")
 
 def run():
+    updated = []
+
     if not MIGRATIONS:
         print("  Нет миграций.")
-        return
+        return updated
 
     instances = [
         d for d in INSTANCES.iterdir()
@@ -46,7 +48,7 @@ def run():
 
     if not instances:
         print("  Нет инстансов для обновления.")
-        return
+        return updated
 
     for instance_dir in sorted(instances):
         workspace = instance_dir / "openclaw_data" / "workspace"
@@ -58,6 +60,7 @@ def run():
             continue
 
         print(f"  [{instance_dir.name}] применяю {len(pending)} миграций:")
+        instance_updated = False
         for mig_path in pending:
             mod = load_migration(mig_path)
             mid = mig_path.stem
@@ -69,8 +72,16 @@ def run():
                     mod.apply(workspace)
                     mark_applied(workspace, mid)
                     print(f"    ✅ {mid}: {desc}")
+                    instance_updated = True
             except Exception as e:
                 print(f"    ❌ {mid}: {e}")
+        if instance_updated:
+            updated.append(instance_dir.name)
+
+    return updated
 
 if __name__ == "__main__":
-    run()
+    updated = run()
+    if updated:
+        # Выводим машиночитаемую строку для хука
+        print(f"MIGRATED_INSTANCES: {' '.join(updated)}")

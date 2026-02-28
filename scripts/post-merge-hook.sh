@@ -59,7 +59,15 @@ if echo "$REBUILD_LIST" | grep -q "__all__"; then
   echo "  🐳 docker-compose.yml изменился — пересобираю всё..."
   $COMPOSE up -d --build 2>&1 | grep -E "(Building|built|Started|Recreated|error)" || true
   echo "  🗄️  Применяю миграции воркспейсов..."
-  python3 "$REPO_ROOT/scripts/migrate-instances.py"
+  MIGRATE_OUT=$(python3 "$REPO_ROOT/scripts/migrate-instances.py")
+  echo "$MIGRATE_OUT" | grep -v "^MIGRATED_INSTANCES:" || true
+  MIGRATED=$(echo "$MIGRATE_OUT" | grep "^MIGRATED_INSTANCES:" | sed 's/^MIGRATED_INSTANCES: //')
+  if [ -n "$MIGRATED" ]; then
+    echo "  🔁 Перезапускаю обновлённые инстансы: $MIGRATED"
+    for name in $MIGRATED; do
+      $COMPOSE restart "assistant-$name" 2>&1 | grep -E "(Restarting|Started|error)" || true
+    done
+  fi
   echo "  ✅ Готово."
   exit 0
 fi
@@ -83,6 +91,16 @@ fi
 
 # Применить миграции воркспейсов инстансов
 echo "  🗄️  Применяю миграции воркспейсов..."
-python3 "$REPO_ROOT/scripts/migrate-instances.py"
+MIGRATE_OUT=$(python3 "$REPO_ROOT/scripts/migrate-instances.py")
+echo "$MIGRATE_OUT" | grep -v "^MIGRATED_INSTANCES:" || true
+
+# Автоперезапуск инстансов у которых обновились файлы
+MIGRATED=$(echo "$MIGRATE_OUT" | grep "^MIGRATED_INSTANCES:" | sed 's/^MIGRATED_INSTANCES: //')
+if [ -n "$MIGRATED" ]; then
+  echo "  🔁 Перезапускаю обновлённые инстансы: $MIGRATED"
+  for name in $MIGRATED; do
+    $COMPOSE restart "assistant-$name" 2>&1 | grep -E "(Restarting|Started|error)" || true
+  done
+fi
 
 echo "  ✅ Готово."
