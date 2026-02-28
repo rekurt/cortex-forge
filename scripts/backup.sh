@@ -1,39 +1,44 @@
-#!/usr/bin/env bash
-# backup.sh — бекап воркспейсов всех инстансов в git
-# Запускается через cron или make backup
+#!/bin/bash
+# backup.sh — Резервное копирование данных инстансов
+# 1. git commit изменений в /infra
+# 2. tar.gz архив instances/ → /infra/backups/
+#
+# ВАЖНО: git push выполняется только с хост-машины (root@89.167.99.119).
+# Из контейнера делаем только commit; push запускается отдельно на хосте.
 
-set -e
-TODAY=$(date +%Y-%m-%d)
-CHANGED=0
+set -euo pipefail
 
-echo "🔄 Бекап воркспейсов ($TODAY)..."
+INFRA="/infra"
+BACKUPS="$INFRA/backups"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+ARCHIVE="$BACKUPS/instances_$TIMESTAMP.tar.gz"
+CHANGES=()
 
-cd "$(dirname "$0")/.."
+mkdir -p "$BACKUPS"
 
-for instance_dir in instances/*/; do
-    name=$(basename "$instance_dir")
-    [ "$name" = "_template" ] && continue
+# ─── 1. Git commit ───────────────────────────────────────────────────────────
+cd "$INFRA"
 
-    ws="$instance_dir/workspace"
-    [ -d "$ws" ] || continue
-
-    # Добавляем файлы воркспейса (кроме .venv, __pycache__)
-    git add "$ws" 2>/dev/null || true
-    CHANGED=$((CHANGED + 1))
-done
-
-if git diff --staged --quiet; then
-    echo "✅ Изменений нет"
-    exit 0
+if git diff --quiet && git diff --cached --quiet; then
+    CHANGES+=("git: нет изменений")
+else
+    git add -A
+    git commit -m "chore: hourly backup $TIMESTAMP [Admin]" 2>&1
+    CHANGES+=("git: commit $TIMESTAMP")
 fi
 
-FILES=$(git diff --staged --name-only | wc -l)
-git commit -m "backup: авто-бекап $TODAY ($FILES файлов)" --quiet
+# ─── 2. Архив instances/ ─────────────────────────────────────────────────────
+tar -czf "$ARCHIVE" \
+    --exclude="instances/*/openclaw_data/agents/main/sessions/*.jsonl" \
+    instances/ 2>&1
 
-if ! git push --quiet 2>&1; then
-    echo "❌ Ошибка git push! Бекап закоммичен локально, но не отправлен на remote." >&2
-    echo "   Проверь: git log -1 && git push" >&2
-    exit 1
-fi
+SIZE=$(du -sh "$ARCHIVE" | cut -f1)
+CHANGES+=("архив: $ARCHIVE ($SIZE)")
 
-echo "✅ Запушено: $FILES файлов"
+# ─── 3. Ротация — оставляем только последние 48 архивов (~2 суток) ───────────
+ls -t "$BACKUPS"/instances_*.tar.gz 2>/dev/null | tail -n +49 | xargs -r rm -f
+KEPT=$(ls "$BACKUPS"/instances_*.tar.gz 2>/dev/null | wc -l)
+CHANGES+=("ротация: сохранено $KEPT архивов")
+
+# ─── Итог ────────────────────────────────────────────────────────────────────
+printf '%s\n' "${CHANGES[@]}"
