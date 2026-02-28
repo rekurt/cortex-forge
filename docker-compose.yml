@@ -26,11 +26,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    deploy:
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: 256M
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health', timeout=3)"]
@@ -55,11 +50,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    deploy:
-      resources:
-        limits:
-          cpus: "0.3"
-          memory: 128M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
@@ -76,8 +66,8 @@ services:
     restart: unless-stopped
     env_file: instances/admin/.env
     volumes:
-      - ./instances/admin/workspace:/home/user/.openclaw/workspace
-      - ./instances/admin/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+      - ./instances/admin/openclaw_data:/home/node/.openclaw
+      - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
       - ./shared/skills:/shared/skills:ro
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
       - ./instances:/infra/instances         # воркспейсы инстансов
@@ -92,14 +82,10 @@ services:
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
     networks:
       - corp-internal
+      - corp-egress
       - corp-admin
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -118,13 +104,12 @@ services:
   #   restart: unless-stopped
   #   env_file: instances/nikita/.env
   #   volumes:
-  #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
-  #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
+  #     - ./instances/nikita/workspace:/home/node/.openclaw/workspace
+  #     - ./instances/nikita/openclaw.json:/home/node/.openclaw/openclaw.json
   #     - ./shared/skills:/shared/skills:ro
   #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
   #   environment:
-  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}     # квота-ключ, не реальный
-  #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}     # квота-ключ, не реальный
   #     - BROKER_URL=http://message-broker:8080
   #     - BROKER_KEY=${BROKER_KEY_NIKITA}
   #   networks:
@@ -135,7 +120,7 @@ services:
   #     resources:
   #       limits:
   #         cpus: "1.0"
-  #         memory: 512M
+  #         memory: 1G
   #   depends_on:
   #     quota-proxy:
   #       condition: service_healthy
@@ -163,11 +148,6 @@ services:
       - corp-admin
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "0.3"
-          memory: 128M
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -209,17 +189,101 @@ services:
       - corp-services
     security_opt:
       - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          cpus: "2.0"
-          memory: 1G
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8090/v1/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  assistant-nikita:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-nikita
+    restart: unless-stopped
+    env_file:
+      - instances/nikita/.env
+    volumes:
+      - ./instances/nikita/openclaw_data:/home/node/.openclaw
+      - ./shared/skills:/shared/skills:ro
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_NIKITA}
+    networks:
+      - corp-internal
+      - corp-egress
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    labels:
+      corp.assistant.role: personal
+      corp.assistant.user: nikita
+
+  assistant-vasily:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-vasily
+    restart: unless-stopped
+    env_file:
+      - instances/vasily/.env
+    volumes:
+      - ./instances/vasily/openclaw_data:/home/node/.openclaw
+      - ./shared/skills:/shared/skills:ro
+    environment:
+      - ANTHROPIC_API_KEY=${QUOTA_KEY_VASILY}
+      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_VASILY}
+    networks:
+      - corp-internal
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1.2G
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    labels:
+      corp.assistant.role: personal
+      corp.assistant.user: vasily
+
+  assistant-dmitry:
+    image: ghcr.io/openclaw/openclaw:latest
+    container_name: corp-dmitry
+    restart: unless-stopped
+    env_file:
+      - instances/dmitry/.env
+    volumes:
+      - ./instances/dmitry/openclaw_data:/home/node/.openclaw
+      - ./shared/skills:/shared/skills:ro
+    environment:
+      - ANTHROPIC_API_KEY=${QUOTA_KEY_DMITRY}
+      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_DMITRY}
+    networks:
+      - corp-internal
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1.2G
+    depends_on:
+      quota-proxy:
+        condition: service_healthy
+      message-broker:
+        condition: service_healthy
+    labels:
+      corp.assistant.role: personal
+      corp.assistant.user: dmitry
 
 volumes:
   quota-data:
