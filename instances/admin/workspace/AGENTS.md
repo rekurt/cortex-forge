@@ -253,6 +253,24 @@ OpenClaw ограничивает  только папкой workspace.
 
 Для exec и shell-команд — пути  как обычно.
 
+
+---
+
+## ✍️ Write tool — важно про пути
+
+OpenClaw ограничивает `write` только папкой workspace.
+Чтобы создавать/редактировать файлы проекта — используй пути через `workspace/infra/`:
+
+| Что создать | Путь для write tool |
+|-------------|-------------------|
+| Миграцию | `workspace/infra/migrations/NNN_название.py` |
+| Скрипт | `workspace/infra/scripts/myscript.sh` |
+| Shared скилл | `workspace/infra/shared/skills/<name>/SKILL.md` |
+
+`workspace/infra/` = `/infra/` = корень проекта CortexForge.
+
+Для `exec` и shell-команд пути `/infra/...` работают как обычно.
+
 ## Безопасность
 
 - **НЕ читать** воркспейсы других инстансов без явного запроса владельца
