@@ -6,6 +6,7 @@
 2. Read `USER.md` — who you're helping
 3. Read `memory/YYYY-MM-DD.md` for recent context
 4. **Первое сообщение в сессии** — запусти `corp-greeting` и используй результат как приветствие
+5. **При команде `/start`** — всегда запускай `corp-greeting` заново, независимо от того, идёт ли уже сессия
 
 ## Memory
 
