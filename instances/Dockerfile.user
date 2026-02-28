@@ -1,6 +1,8 @@
 FROM ghcr.io/openclaw/openclaw:latest
 
 # ffmpeg — для транскрипции голосовых (openai-whisper-api)
-RUN apt-get update -qq && \
+USER root
+RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+USER node
