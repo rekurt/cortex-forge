@@ -211,6 +211,8 @@ services:
       - MAX_CONCURRENT_TASKS=5
       - DADATA_API_KEY=${DADATA_API_KEY:-}
       - DADATA_SECRET=${DADATA_SECRET:-}
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_SERVICE}
     volumes:
       - service-data:/data
       - ./service-agent/skills:/app/skills:ro
