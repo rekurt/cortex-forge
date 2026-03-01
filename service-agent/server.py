@@ -14,6 +14,7 @@ Python stdlib only. No pip.
 
 import os
 import re
+import hmac
 import json
 import time
 import sqlite3
@@ -320,7 +321,7 @@ def require_auth(handler) -> bool:
     auth = handler.headers.get("Authorization", "")
     if not SERVICE_API_KEY:
         return True  # auth disabled
-    if auth == f"Bearer {SERVICE_API_KEY}":
+    if hmac.compare_digest(auth, f"Bearer {SERVICE_API_KEY}"):
         return True
     body = b'{"status":"error","error":"unauthorized"}'
     handler.send_response(401)
