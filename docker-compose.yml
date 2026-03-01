@@ -205,6 +205,7 @@ services:
       - instances/nikita/.env
     volumes:
       - ./instances/nikita/openclaw_data:/home/node/.openclaw
+      - ../nikita-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}
@@ -233,6 +234,7 @@ services:
       - instances/vasily/.env
     volumes:
       - ./instances/vasily/openclaw_data:/home/node/.openclaw
+      - ../vasily-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_VASILY}
@@ -261,6 +263,7 @@ services:
       - instances/dmitry/.env
     volumes:
       - ./instances/dmitry/openclaw_data:/home/node/.openclaw
+      - ../dmitry-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_DMITRY}
