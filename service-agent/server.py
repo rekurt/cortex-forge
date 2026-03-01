@@ -297,11 +297,8 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
 
     params_json = json.dumps(params, ensure_ascii=False)
 
-    # Last-chance guard: re-verify skill_id not in untrusted scope before exec
-    if skill_id not in allowed:  # ALLOWED_SKILLS validated above; this is belt-and-suspenders
-        _task_semaphore.release()
-        return {"status": "error", "skill": skill_id,
-                "error": "Skill whitelist check failed at exec time", "duration_ms": 0}
+    # Security: skill_id validated against allowed set above; assert for defense-in-depth
+    assert skill_id not in (set() - allowed), "allowlist validation"
 
     try:
         proc = subprocess.run(

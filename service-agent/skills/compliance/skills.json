@@ -17,5 +17,5 @@
     }
   },
   "timeout": 150,
-  "env_vars": ["DADATA_API_KEY"]
+  "env_vars": ["DADATA_API_KEY", "DADATA_SECRET"]
 }

@@ -81,7 +81,7 @@ make service-skills                    # список скиллов
 
 ### Personal skills
 
-Каждый инстанс может иметь личные скиллы в `workspace/skills/`. Adminитет: personal skills > shared skills. Документация: `shared/docs/personal-vs-shared-skills.md`.
+Каждый инстанс может иметь личные скиллы в `workspace/skills/`. Adminитет: personal skills > shared skills. Документация: `shared/docs/common/SKILLS.md`.
 
 ### Network isolation
 
