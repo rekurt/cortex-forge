@@ -67,6 +67,7 @@ services:
     env_file: instances/admin/.env
     volumes:
       - ./instances/admin/openclaw_data:/home/node/.openclaw
+      - ../admin-workspace:/home/node/.openclaw/workspace
       - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
       - ./shared/skills:/shared/skills:ro
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
