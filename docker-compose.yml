@@ -170,6 +170,8 @@ services:
       - corp-admin
     security_opt:
       - no-new-privileges:true
+    group_add:
+      - "${DOCKER_GID:-999}"   # docker group GID — нужен для доступа к /var/run/docker.sock под non-root
     deploy:
       resources:
         limits:
