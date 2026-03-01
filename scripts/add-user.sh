@@ -28,7 +28,20 @@ fi
 
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
-mkdir -p "$TARGET/openclaw_data/workspace/memory"
+mkdir -p "/openclaw_data/workspace/memory"
+
+# Создаём workspace в корне репо (трекается в git)
+REPO_WORKSPACE="../../${NAME}-workspace"
+if [ ! -d "$REPO_WORKSPACE" ]; then
+    cp -r "$TEMPLATE/workspace/" "$REPO_WORKSPACE"
+    rm -rf "$REPO_WORKSPACE/memory" "$REPO_WORKSPACE/.openclaw"
+    cat > "$REPO_WORKSPACE/.gitignore" << 'GITEOF'
+notes-vault/
+memory/
+USER.md
+GITEOF
+    echo "  ✅ Workspace создан в ${NAME}-workspace/"
+fi
 
 # Копируем шаблоны воркспейса
 cp -r "$TEMPLATE/workspace/"* "$TARGET/openclaw_data/workspace/"
@@ -109,6 +122,7 @@ service = f"""
       - instances/{name}/.env
     volumes:
       - ./instances/{name}/openclaw_data:/home/node/.openclaw
+      - ../{name}-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
     environment:

@@ -205,6 +205,7 @@ services:
       - instances/user-1/.env
     volumes:
       - ./instances/user-1/openclaw_data:/home/node/.openclaw
+      - ../user-1-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}
@@ -233,6 +234,7 @@ services:
       - instances/user-4/.env
     volumes:
       - ./instances/user-4/openclaw_data:/home/node/.openclaw
+      - ../user-4-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_4}
@@ -261,6 +263,7 @@ services:
       - instances/user-3/.env
     volumes:
       - ./instances/user-3/openclaw_data:/home/node/.openclaw
+      - ../user-3-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_3}
