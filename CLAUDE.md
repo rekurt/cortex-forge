@@ -64,11 +64,24 @@ make service-skills                    # список скиллов
 | Компонент | Путь | Назначение |
 |-----------|------|------------|
 | `quota-proxy` | `quota-proxy/proxy.py` | Единственный держатель `ANTHROPIC_API_KEY`; квотирование, rate-limit, аудит |
-| `broker` | `broker/broker.py` | In-memory шина сообщений между инстансами |
+| `broker` | `broker/broker.py` | Шина сообщений между инстансами (SQLite persistence) |
 | `resource-monitor` | `resource-monitor/monitor.py` | Метрики Docker-контейнеров, алерты в broker |
 | `service-agent` | `service-agent/server.py` | HTTP API для вызова скиллов (stdin→stdout JSON) |
 | `instances/admin` | `instances/admin/` | Инстанс Admin — инфраструктурный контроль, прямой `ANTHROPIC_API_KEY` |
 | `instances/_template` | `instances/_template/` | Шаблон для новых инстансов |
+
+### Service-agent skills
+
+| Скилл | Путь | Назначение |
+|-------|------|------------|
+| `compliance` | `service-agent/skills/compliance/` | Проверка контрагентов через DaData |
+| `corp-messenger` | `service-agent/skills/corp-messenger/` | Межинстансный мессенджер через broker |
+| `admin-dashboard` | `service-agent/skills/admin-dashboard/` | Единый центр управления (quota + monitor + broker) |
+| `qmd` | `service-agent/skills/qmd/` | Полнотекстовый поиск по markdown файлам |
+
+### Personal skills
+
+Каждый инстанс может иметь личные скиллы в `workspace/skills/`. Adminитет: personal skills > shared skills. Документация: `shared/docs/personal-vs-shared-skills.md`.
 
 ### Network isolation
 
@@ -130,6 +143,8 @@ openclaw.json   # конфиг: Telegram-канал + модель
 - `ANTHROPIC_API_KEY` — только здесь, только для `quota-proxy`
 - `QUOTA_ADMIN_TOKEN` — 32+ символов
 - `QUOTA_KEY_<NAME>`, `QUOTA_LIMIT_<NAME>`, `BROKER_KEY_<NAME>` — генерируются скриптом `add-user.sh`
+- `BROKER_KEY_SERVICE` — ключ service-agent для доступа к broker (corp-messenger skill)
+- `SERVICE_API_KEY` — ключ для авторизации запросов к service-agent API
 
 Переменные инстанса в `instances/<name>/.env`:
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOW_FROM`
