@@ -222,6 +222,8 @@ services:
     volumes:
       - service-data:/data
       - ./service-agent/skills:/app/skills:ro
+      - ./shared/skills:/shared/skills:ro
+      - ./shared/docs:/shared/docs:ro
     ports:
       - "127.0.0.1:8090:8090"   # только localhost — nginx/reverse-proxy закроет снаружи
     networks:
