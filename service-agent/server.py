@@ -362,7 +362,7 @@ def require_auth(handler) -> bool:
     auth = handler.headers.get("Authorization", "")
     if not SERVICE_API_KEY:
         return True  # auth disabled
-    if hmac.compare_digest(auth, f"Bearer {SERVICE_API_KEY}"):
+    if hmac.compare_digest(auth.encode("utf-8"), f"Bearer {SERVICE_API_KEY}".encode("utf-8")):
         return True
     body = b'{"status":"error","error":"unauthorized"}'
     handler.send_response(401)

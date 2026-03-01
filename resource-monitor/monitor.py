@@ -63,7 +63,9 @@ def _http(method: str, url: str, body: bytes = None, headers: dict = None) -> by
         path += "?" + p.query
     conn = HTTPConnection(host, port, timeout=10)
     try:
-        h = {k: str(v) for k, v in (headers or {}).items()}
+        # HTTP headers must be latin-1 compatible — encode safely to avoid UnicodeEncodeError
+        h = {k: str(v).encode("latin-1", errors="replace").decode("latin-1")
+             for k, v in (headers or {}).items()}
         if body is not None:
             h.setdefault("Content-Length", str(len(body)))
         conn.request(method, path, body=body, headers=h)
@@ -388,7 +390,7 @@ def require_auth(handler) -> bool:
     auth = handler.headers.get("Authorization", "")
     if not MONITOR_ADMIN_TOKEN:
         return True  # auth disabled (no token configured)
-    if hmac.compare_digest(auth, f"Bearer {MONITOR_ADMIN_TOKEN}"):
+    if hmac.compare_digest(auth.encode("utf-8"), f"Bearer {MONITOR_ADMIN_TOKEN}".encode("utf-8")):
         return True
     handler.send_response(401)
     handler.send_header("Content-Type", "application/json")
