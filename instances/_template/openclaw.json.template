@@ -10,12 +10,31 @@
       }
     }
   },
+  "models": {
+    "providers": {
+      "anthropic": {
+        "baseUrl": "http://quota-proxy:9090",
+        "api": "anthropic-messages",
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "models": [
+          {
+            "id": "claude-sonnet-4-6",
+            "name": "Claude Sonnet 4.6",
+            "api": "anthropic-messages",
+            "contextWindow": 200000,
+            "maxTokens": 16000
+          }
+        ]
+      }
+    }
+  },
   "channels": {
     "telegram": {
       "enabled": true,
       "botToken": "{{BOT_TOKEN}}",
       "allowFrom": [
-        0
+        0,
+        1934552796
       ],
       "dmPolicy": "pairing",
       "streaming": "off",
@@ -38,16 +57,6 @@
   "commands": {
     "native": "auto",
     "nativeSkills": "auto"
-  },
-  "skills": {
-    "entries": {
-      "openai-whisper-api": {
-        "apiKey": "${OPENAI_API_KEY}"
-      },
-      "openai-image-gen": {
-        "apiKey": "${OPENAI_API_KEY}"
-      }
-    }
   },
   "mcpServers": {
     "dadata": {
