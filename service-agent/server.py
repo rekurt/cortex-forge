@@ -214,6 +214,7 @@ _ENV_WHITELIST = frozenset({
     "PATH", "HOME", "TMPDIR", "TEMP", "TMP",
     "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES",
     "USER", "LOGNAME",
+    "PYTHONIOENCODING",  # предотвращает UnicodeEncodeError при выводе не-ASCII символов
 })
 
 
