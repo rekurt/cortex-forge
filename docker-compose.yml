@@ -216,6 +216,9 @@ services:
       - DADATA_SECRET=${DADATA_SECRET:-}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_SERVICE}
+      - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+      - QUOTA_PROXY_URL=http://quota-proxy:9090
+      - MONITOR_URL=http://resource-monitor:9091
     volumes:
       - service-data:/data
       - ./service-agent/skills:/app/skills:ro

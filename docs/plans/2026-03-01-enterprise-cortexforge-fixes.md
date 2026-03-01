@@ -234,19 +234,19 @@ Broker хранит сообщения в collections.deque — при рест�
 - Modify: `docker-compose.yml` (env vars для service-agent)
 - Modify: `Makefile` (добавить admin-overview target)
 
-- [ ] Создать skills.json:
+- [x] Создать skills.json:
   - id: "admin-dashboard"
   - params: action (enum: overview/instances/set-limit/reset-quota/help), name (optional), limit (optional)
   - timeout: 30
   - env_vars: ["QUOTA_ADMIN_TOKEN", "QUOTA_PROXY_URL", "MONITOR_URL", "BROKER_URL"]
-- [ ] Создать run.py (Python stdlib, urllib):
+- [x] Создать run.py (Python stdlib, urllib):
   - action "overview": агрегировать quota-report + monitor metrics + broker health + active alerts. В ответ включать подсказки: "Чтобы изменить лимит, вызови admin-dashboard action=set-limit name=X limit=Y"
   - action "instances": список инстансов с квотами, использованием, статусами, подключением к сетям
   - action "set-limit": POST к quota-proxy /quota/set-limit (name, limit). В ответ включать подтверждение и текущее использование
   - action "reset-quota": POST к quota-proxy /quota/reset (name). В ответ включать предупреждение
   - action "help": вернуть полный справочник по API, ключам, сетям, частым ошибкам (читать из KNOWLEDGE.md)
   - Все HTTP-вызовы через urllib.request
-- [ ] Создать KNOWLEDGE.md — обширная база знаний для Приора:
+- [x] Создать KNOWLEDGE.md — обширная база знаний для Приора:
   Разделы:
   1. Архитектура ключей (полная схема с примерами)
   2. Сети Docker (какой сервис на какой сети, почему)
@@ -258,9 +258,9 @@ Broker хранит сообщения в collections.deque — при рест�
   4. Пошаговые инструкции для каждой операции
   5. Что НЕЛЬЗЯ делать (danger zone)
   6. Мониторинг: какие метрики смотреть, что нормально, что алерт
-- [ ] В docker-compose.yml assistant-service: добавить QUOTA_ADMIN_TOKEN, QUOTA_PROXY_URL=http://quota-proxy:9090, MONITOR_URL=http://resource-monitor:9091
-- [ ] В Makefile: `make admin-overview` — curl к service-agent /v1/run
-- [ ] Тест: вызвать overview через service-agent API, убедиться что данные корректно агрегированы
+- [x] В docker-compose.yml assistant-service: добавить QUOTA_ADMIN_TOKEN, QUOTA_PROXY_URL=http://quota-proxy:9090, MONITOR_URL=http://resource-monitor:9091
+- [x] В Makefile: `make admin-overview` — curl к service-agent /v1/run
+- [x] Тест: вызвать overview через service-agent API, убедиться что данные корректно агрегированы
 
 ### Task 6: qmd — быстрый поиск по markdown файлам (FEATURE)
 
