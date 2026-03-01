@@ -163,7 +163,7 @@ Corp-messenger НЕ РАБОТАЛ. Причина: в `shared/skills/corp-messe
 - Modify: `docker-compose.yml` (добавить BROKER_URL и BROKER_KEY env vars для service-agent, подключить service-agent к corp-internal)
 - Modify: `.env.example` (добавить BROKER_KEY_SERVICE)
 
-- [ ] Создать skills.json:
+- [x] Создать skills.json:
   ```json
   {
     "id": "corp-messenger",
@@ -178,23 +178,23 @@ Corp-messenger НЕ РАБОТАЛ. Причина: в `shared/skills/corp-messe
     "env_vars": ["BROKER_URL", "BROKER_KEY"]
   }
   ```
-- [ ] Создать run.py (Python stdlib, urllib.request):
+- [x] Создать run.py (Python stdlib, urllib.request):
   - action "send": POST /send к BROKER_URL с {to, message}, Authorization: Bearer BROKER_KEY
   - action "inbox": GET /inbox, вернуть список сообщений
   - action "clear": DELETE /inbox, очистить прочитанные
   - action "list": GET /health, показать доступные инстансы (без auth)
   - Обработка ошибок: 403 (bad key), 429 (rate limit), 404 (unknown recipient), network errors
   - Все HTTP через urllib.request.Request (stdlib only, без curl)
-- [ ] В docker-compose.yml:
+- [x] В docker-compose.yml:
   - Добавить service-agent в сеть corp-internal (чтобы достучаться до broker)
   - Добавить environment: BROKER_URL=http://message-broker:8080, BROKER_KEY=${BROKER_KEY_SERVICE}
-- [ ] В корневом .env: сгенерировать BROKER_KEY_SERVICE, добавить в broker environment
-- [ ] Переписать shared/skills/corp-messenger/SKILL.md:
+- [x] В корневом .env: сгенерировать BROKER_KEY_SERVICE, добавить в broker environment
+- [x] Переписать shared/skills/corp-messenger/SKILL.md:
   - Убрать curl-примеры (они не работают в OpenClaw контейнерах)
   - Описать вызов через service-agent HTTP API: POST /v1/run с skill_id=corp-messenger
   - Примеры для каждого action
-- [ ] docker compose build assistant-service message-broker && docker compose up -d
-- [ ] E2E тест: отправить сообщение через service-agent API, проверить inbox другого инстанса через broker API
+- [x] docker compose build assistant-service message-broker && docker compose up -d
+- [x] E2E тест: отправить сообщение через service-agent API, проверить inbox другого инстанса через broker API
 
 ### Task 4: Broker persistence — SQLite вместо in-memory (RELIABILITY)
 
