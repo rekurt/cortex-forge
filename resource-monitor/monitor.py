@@ -278,6 +278,14 @@ def send_alert(key: str, message: str):
 
 def check_alerts(metrics: list, disk: dict, quota: dict):
     """Evaluate thresholds and fire alerts as needed."""
+    # Cleanup expired entries to prevent unbounded memory growth
+    now = time.time()
+    with _lock:
+        expired = [k for k, v in _active_alerts.items()
+                   if now - v.get("fired_at", 0) > ALERT_COOLDOWN]
+        for k in expired:
+            del _active_alerts[k]
+
     for m in metrics:
         name = m["name"]
 
