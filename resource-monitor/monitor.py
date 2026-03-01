@@ -18,6 +18,7 @@ import sqlite3
 import shutil
 import threading
 import hmac
+import hashlib
 import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection
@@ -390,7 +391,10 @@ def require_auth(handler) -> bool:
     auth = handler.headers.get("Authorization", "")
     if not MONITOR_ADMIN_TOKEN:
         return True  # auth disabled (no token configured)
-    if hmac.compare_digest(auth.encode("utf-8"), f"Bearer {MONITOR_ADMIN_TOKEN}".encode("utf-8")):
+    if auth.startswith("Bearer ") and hmac.compare_digest(
+        hashlib.sha256(auth[7:].encode()).hexdigest(),
+        hashlib.sha256(MONITOR_ADMIN_TOKEN.encode()).hexdigest(),
+    ):
         return True
     handler.send_response(401)
     handler.send_header("Content-Type", "application/json")
