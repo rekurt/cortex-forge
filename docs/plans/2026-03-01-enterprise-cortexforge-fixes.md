@@ -318,14 +318,14 @@ workspace/skills/ для персональных навыков.
 - Modify: `CLAUDE.md` (обновить с новыми компонентами)
 - Modify: `.env.example` (добавить новые переменные)
 
-- [ ] Security checks: python3 .github/scripts/ai_security_check.py
-- [ ] Shell linting: shellcheck scripts/*.sh
-- [ ] make security-check
-- [ ] docker compose up -d --build && docker compose ps — все контейнеры healthy
-- [ ] E2E тест corp-messenger: отправить сообщение через service-agent, проверить inbox
-- [ ] E2E тест broker persistence: отправить сообщение, рестартнуть broker, проверить inbox
-- [ ] E2E тест admin-dashboard: вызвать overview и help, проверить полноту данных
-- [ ] E2E тест qmd: поиск по md файлам через service-agent
-- [ ] Обновить CLAUDE.md: добавить corp-messenger, admin-dashboard, qmd, personal skills в Architecture
-- [ ] Обновить .env.example: добавить BROKER_KEY_SERVICE и другие новые vars
-- [ ] Переместить этот план в docs/plans/completed/
+- [x] Security checks: python3 .github/scripts/ai_security_check.py
+- [x] Shell linting: shellcheck scripts/*.sh
+- [x] make security-check
+- [x] docker compose up -d --build && docker compose ps — все контейнеры healthy
+- [x] E2E тест corp-messenger: отправить сообщение через service-agent, проверить inbox
+- [x] E2E тест broker persistence: отправить сообщение, рестартнуть broker, проверить inbox
+- [x] E2E тест admin-dashboard: вызвать overview и help, проверить полноту данных
+- [x] E2E тест qmd: поиск по md файлам через service-agent
+- [x] Обновить CLAUDE.md: добавить corp-messenger, admin-dashboard, qmd, personal skills в Architecture
+- [x] Обновить .env.example: добавить BROKER_KEY_SERVICE и другие новые vars
+- [x] Переместить этот план в docs/plans/completed/
