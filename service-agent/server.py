@@ -206,6 +206,47 @@ def find_runner(skill_id: str) -> tuple:
     raise ValueError(f"Skill '{skill_id}' has no run.py or run.sh")
 
 
+# ── Skill environment isolation ───────────────────────────────────────────────
+
+# Variables always passed to skills — safe, non-secret system vars.
+_ENV_WHITELIST = frozenset({
+    "PATH", "HOME", "TMPDIR", "TEMP", "TMP",
+    "LANG", "LC_ALL", "LC_CTYPE", "LC_MESSAGES",
+    "USER", "LOGNAME",
+})
+
+
+def build_skill_env(skill_id: str) -> dict:
+    """
+    Return a sanitised environment dict for skill execution.
+
+    Always includes _ENV_WHITELIST vars (if present in os.environ).
+    Additional vars can be declared in the skill's skills.json as:
+      "env_vars": ["DADATA_API_KEY", "SOME_TOKEN"]
+    Only vars listed there will be forwarded from the host environment.
+    """
+    env: dict = {}
+
+    # 1. Safe system variables
+    for key in _ENV_WHITELIST:
+        if key in os.environ:
+            env[key] = os.environ[key]
+
+    # 2. Skill-declared variables from manifest
+    manifest_path = SKILLS_DIR / skill_id / "skills.json"
+    if manifest_path.exists():
+        try:
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+            for var in manifest.get("env_vars", []):
+                if isinstance(var, str) and var in os.environ:
+                    env[var] = os.environ[var]
+        except Exception as e:
+            log.warning("Failed to read env_vars from %s: %s", manifest_path, e)
+
+    return env
+
+
 # ── Skill execution ───────────────────────────────────────────────────────────
 
 def run_skill(skill_id: str, caller: str, params: dict) -> dict:
@@ -266,7 +307,7 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
             capture_output=True,
             text=True,
             timeout=timeout,
-            env={**os.environ},
+            env=build_skill_env(skill_id),
         )
         duration_ms = int((time.time() - start) * 1000)
 

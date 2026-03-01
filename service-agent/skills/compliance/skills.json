@@ -16,5 +16,6 @@
       "description": "Глубина проверки: full — полный отчёт, short — краткая сводка"
     }
   },
-  "timeout": 150
+  "timeout": 150,
+  "env_vars": ["DADATA_API_KEY"]
 }
