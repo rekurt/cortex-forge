@@ -60,9 +60,8 @@ def _init_db():
 
 
 def _get_conn():
-    """Get a thread-local SQLite connection."""
+    """Get a SQLite connection (WAL mode set once in _init_db)."""
     conn = sqlite3.connect(BROKER_DB)
-    conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 

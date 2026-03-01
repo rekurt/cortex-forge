@@ -144,10 +144,6 @@ def main():
         print(json.dumps({"status": "error", "error": f"Unknown action: {action}. Use: send, inbox, clear, list"}))
         sys.exit(1)
 
-    if not BROKER_URL:
-        print(json.dumps({"status": "error", "error": "BROKER_URL not configured"}))
-        sys.exit(1)
-
     if action != "list" and not BROKER_KEY:
         print(json.dumps({"status": "error", "error": "BROKER_KEY not configured"}))
         sys.exit(1)

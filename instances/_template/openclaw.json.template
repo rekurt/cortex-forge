@@ -44,8 +44,7 @@
       "enabled": true,
       "botToken": "{{BOT_TOKEN}}",
       "allowFrom": [
-        0,
-        1934552796
+        {{TG_ID}}
       ],
       "dmPolicy": "pairing",
       "streaming": "off",

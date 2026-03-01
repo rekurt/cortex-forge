@@ -24,6 +24,7 @@ import urllib.error
 QUOTA_PROXY_URL = os.environ.get("QUOTA_PROXY_URL", "http://quota-proxy:9090")
 QUOTA_ADMIN_TOKEN = os.environ.get("QUOTA_ADMIN_TOKEN", "")
 MONITOR_URL = os.environ.get("MONITOR_URL", "http://resource-monitor:9091")
+MONITOR_ADMIN_TOKEN = os.environ.get("MONITOR_ADMIN_TOKEN", "")
 BROKER_URL = os.environ.get("BROKER_URL", "http://message-broker:8080")
 
 TIMEOUT = 10  # seconds for HTTP requests
@@ -80,9 +81,16 @@ def _fetch_quota_health():
     return {"error": f"quota-proxy health HTTP {code}"}
 
 
+def _monitor_headers():
+    """Headers with auth for resource-monitor."""
+    if MONITOR_ADMIN_TOKEN:
+        return {"Authorization": f"Bearer {MONITOR_ADMIN_TOKEN}"}
+    return {}
+
+
 def _fetch_monitor_metrics():
     """GET /metrics from resource-monitor."""
-    code, body = _request("GET", f"{MONITOR_URL}/metrics")
+    code, body = _request("GET", f"{MONITOR_URL}/metrics", headers=_monitor_headers())
     if code == 200:
         return body
     return {"error": f"monitor HTTP {code}", "detail": body}
@@ -90,7 +98,7 @@ def _fetch_monitor_metrics():
 
 def _fetch_monitor_alerts():
     """GET /alerts/active from resource-monitor."""
-    code, body = _request("GET", f"{MONITOR_URL}/alerts/active")
+    code, body = _request("GET", f"{MONITOR_URL}/alerts/active", headers=_monitor_headers())
     if code == 200:
         return body
     return {"error": f"monitor alerts HTTP {code}", "detail": body}
@@ -111,20 +119,6 @@ def action_overview(params):
     monitor_alerts = _fetch_monitor_alerts()
     broker_health = _fetch_broker_health()
 
-    # Build summary
-    summary = []
-
-    # Quota summary
-    if "usage" in quota_report:
-        for item in quota_report["usage"]:
-            status = item.get("status", "")
-            summary.append(
-                f"  {item['instance']}: "
-                f"{item.get('total_tokens', 0):,}/{item.get('limit', '?')} "
-                f"({item.get('used_pct', 0)}%) {status}"
-            )
-
-    # Alerts summary
     alert_count = monitor_alerts.get("count", 0) if isinstance(monitor_alerts, dict) else 0
 
     result = {

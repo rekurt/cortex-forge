@@ -21,5 +21,5 @@
     }
   },
   "timeout": 30,
-  "env_vars": ["QUOTA_ADMIN_TOKEN", "QUOTA_PROXY_URL", "MONITOR_URL", "BROKER_URL"]
+  "env_vars": ["QUOTA_ADMIN_TOKEN", "QUOTA_PROXY_URL", "MONITOR_URL", "MONITOR_ADMIN_TOKEN", "BROKER_URL"]
 }

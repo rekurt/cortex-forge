@@ -269,10 +269,8 @@ def send_alert(key: str, message: str):
     log.warning(f"ALERT [{key}]: {message}")
     try:
         body = json.dumps({
-            "from":    "monitor",
             "to":      "admin",
-            "subject": f"[ALERT] {key}",
-            "body":    message,
+            "message": f"[ALERT {key}] {message}",
         }, ensure_ascii=False).encode("utf-8")
         _http("POST", f"{BROKER_URL}/send", body=body, headers={
             "Content-Type":  "application/json; charset=utf-8",
