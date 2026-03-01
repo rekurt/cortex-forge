@@ -9,7 +9,16 @@ import importlib.util
 import pathlib
 
 REPO_ROOT   = pathlib.Path(__file__).parent.parent
-MIGRATIONS  = sorted((REPO_ROOT / "migrations").glob("[0-9]*.py"))
+OVERRIDES   = REPO_ROOT.parent / "overrides"
+
+def _collect_migrations():
+    engine_migs = {p.stem: p for p in (REPO_ROOT / "migrations").glob("[0-9]*.py")}
+    if (OVERRIDES / "migrations").exists():
+        for p in (OVERRIDES / "migrations").glob("[0-9]*.py"):
+            engine_migs[p.stem] = p  # overrides приоритетнее engine
+    return sorted(engine_migs.values(), key=lambda p: p.stem)
+
+MIGRATIONS  = _collect_migrations()
 INSTANCES   = REPO_ROOT / "instances"
 APPLIED_FILE = ".migrations_applied"
 DRY_RUN = "--dry-run" in sys.argv
