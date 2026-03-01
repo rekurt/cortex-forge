@@ -81,7 +81,7 @@ ${ANTHROPIC_API_KEY}`, но для инстансов значение этой 
 - Modify: `instances/admin/workspace/AGENTS.md` (переработать секции про ключи и инфраструктуру)
 - Modify: `instances/admin/workspace/TOOLS.md` (заполнить реальным инфра-контекстом)
 
-- [ ] В AGENTS.md добавить секцию "DANGER ZONE — Ключи и Tokens" с конкретной таблицей:
+- [x] В AGENTS.md добавить секцию "DANGER ZONE — Ключи и Tokens" с конкретной таблицей:
 
   Таблица "Карта ключей CortexForge":
 
@@ -105,7 +105,7 @@ ${ANTHROPIC_API_KEY}`, но для инстансов значение этой 
   - Сбросить квоту: `cd /infra && bash scripts/quota.sh reset <name>`
   - Перезапустить инстанс: `docker restart corp-<name>` (через docker.sock)
 
-- [ ] В AGENTS.md добавить секцию "Файловая система — полная карта изоляции":
+- [x] В AGENTS.md добавить секцию "Файловая система — полная карта изоляции":
 
   Таблица "Что видит каждый контейнер":
 
@@ -124,7 +124,7 @@ ${ANTHROPIC_API_KEY}`, но для инстансов значение этой 
   - Docker socket (docker restart, docker logs)
   - НЕ через прямое редактирование файлов инстансов
 
-- [ ] В AGENTS.md добавить секцию "Как работает quota-proxy — для понимания":
+- [x] В AGENTS.md добавить секцию "Как работает quota-proxy — для понимания":
 
   Схема потока запроса:
   1. OpenClaw шлёт запрос на baseUrl (http://quota-proxy:9090) с x-api-key = ANTHROPIC_API_KEY (из env = QUOTA_KEY_*)
@@ -140,13 +140,13 @@ ${ANTHROPIC_API_KEY}`, но для инстансов значение этой 
   - OpenClaw видит env-переменную ANTHROPIC_API_KEY, подставляет в apiKey
   - Результат: запрос идёт на quota-proxy с quota key, proxy подменяет на реальный
 
-- [ ] В TOOLS.md: заполнить реальными данными инфраструктуры вместо пустого шаблона:
+- [x] В TOOLS.md: заполнить реальными данными инфраструктуры вместо пустого шаблона:
   - Текущие инстансы (имена, порты, Telegram боты)
   - IP/порты внутренних сервисов
   - Команды для частых операций
   - Путь к логам и данным
-- [ ] Создать миграцию `migrations/NNN_update_admin_agents.py` чтобы обновить AGENTS.md Приора
-- [ ] Очистить сессии Приора после обновления (rm *.jsonl + sessions.json)
+- [x] Создать миграцию `migrations/NNN_update_admin_agents.py` чтобы обновить AGENTS.md Приора
+- [x] Очистить сессии Приора после обновления (rm *.jsonl + sessions.json)
 
 ### Task 3: Реализовать corp-messenger skill (CRITICAL FIX)
 
