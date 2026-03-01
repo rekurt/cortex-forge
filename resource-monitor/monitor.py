@@ -303,16 +303,16 @@ def check_alerts(metrics: list, disk: dict, quota: dict):
             f"Host disk: {disk['used_pct']:.1f}% used ({disk['used_gb']:.1f}/{disk['total_gb']:.1f} GB) > {ALERT_DISK_PCT}%",
         )
 
-    # Quota alert
-    for instance, info in quota.items():
-        if isinstance(info, dict):
-            used  = info.get("used", 0)
-            limit = info.get("limit", 0)
-            if limit > 0 and used / limit * 100 > ALERT_QUOTA_PCT:
-                send_alert(
-                    f"quota:{instance}",
-                    f"Token quota [{instance}]: {used}/{limit} ({used/limit*100:.1f}%) > {ALERT_QUOTA_PCT}%",
-                )
+    # Quota alert — quota-proxy /quota/report returns {"month": ..., "usage": [...], "limits": {...}}
+    for item in quota.get("usage", []):
+        instance = item.get("instance", "")
+        used  = item.get("total_tokens", 0)
+        limit = item.get("limit", 0)
+        if isinstance(limit, int) and limit > 0 and used / limit * 100 > ALERT_QUOTA_PCT:
+            send_alert(
+                f"quota:{instance}",
+                f"Token quota [{instance}]: {used}/{limit} ({used/limit*100:.1f}%) > {ALERT_QUOTA_PCT}%",
+            )
 
 
 # ── Polling Loop ──────────────────────────────────────────────────────────────
