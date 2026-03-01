@@ -449,8 +449,8 @@ class Handler(BaseHTTPRequestHandler):
                 pct   = f"{total/limit*100:.0f}%" if limit > 0 else "∞"
                 lvl   = "⚠️" if limit>0 and total/limit>=0.8 else "  "
                 print(f"[quota] {lvl} {instance}: +{inp+out} → {total:,}/{limit:,} ({pct})", flush=True)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[quota] WARNING: failed to parse usage from response for {instance}: {e}", flush=True)
 
         self.send_response(resp_status)
         self.send_header("Content-Type", resp_ct)

@@ -10,6 +10,7 @@ Python stdlib only. No pip.
 """
 
 import os
+import sys
 import json
 import time
 import socket
@@ -47,6 +48,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stdout,
 )
 log = logging.getLogger("monitor")
 
@@ -118,7 +120,7 @@ def list_containers() -> list:
             result.append({"id": c.get("Id", ""), "short_id": cid, "name": name})
         return result
     except Exception as e:
-        log.warning(f"list_containers failed: {e}")
+        log.error(f"list_containers: Docker socket error ({DOCKER_SOCK}): {type(e).__name__}: {e}")
         return []
 
 
