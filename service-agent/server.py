@@ -30,6 +30,7 @@ from pathlib import Path
 
 SERVICE_PORT         = int(os.environ.get("SERVICE_PORT", "8090"))
 SERVICE_API_KEY      = os.environ.get("SERVICE_API_KEY", "")
+_service_api_hash    = hashlib.sha256(SERVICE_API_KEY.encode()).hexdigest() if SERVICE_API_KEY else ""
 SKILL_TIMEOUT        = int(os.environ.get("SKILL_TIMEOUT", "120"))
 MAX_CONCURRENT_TASKS = int(os.environ.get("MAX_CONCURRENT_TASKS", "5"))
 USAGE_DB             = os.environ.get("USAGE_DB", "/data/usage.db")
@@ -366,7 +367,7 @@ def require_auth(handler) -> bool:
         return True  # auth disabled
     if auth.startswith("Bearer ") and hmac.compare_digest(
         hashlib.sha256(auth[7:].encode()).hexdigest(),
-        hashlib.sha256(SERVICE_API_KEY.encode()).hexdigest(),
+        _service_api_hash,
     ):
         return True
     body = b'{"status":"error","error":"unauthorized"}'

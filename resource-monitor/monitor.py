@@ -31,6 +31,7 @@ MONITOR_PORT     = int(os.environ.get("MONITOR_PORT", "9091"))
 MONITOR_INTERVAL = int(os.environ.get("MONITOR_INTERVAL", "60"))
 MONITOR_DB       = os.environ.get("MONITOR_DB", "/data/metrics.db")
 MONITOR_ADMIN_TOKEN = os.environ.get("MONITOR_ADMIN_TOKEN", "")
+_admin_hash         = hashlib.sha256(MONITOR_ADMIN_TOKEN.encode()).hexdigest() if MONITOR_ADMIN_TOKEN else ""
 
 QUOTA_ADMIN_TOKEN = os.environ.get("QUOTA_ADMIN_TOKEN", "")
 QUOTA_PROXY_URL   = os.environ.get("QUOTA_PROXY_URL", "http://quota-proxy:9090")
@@ -393,7 +394,7 @@ def require_auth(handler) -> bool:
         return True  # auth disabled (no token configured)
     if auth.startswith("Bearer ") and hmac.compare_digest(
         hashlib.sha256(auth[7:].encode()).hexdigest(),
-        hashlib.sha256(MONITOR_ADMIN_TOKEN.encode()).hexdigest(),
+        _admin_hash,
     ):
         return True
     handler.send_response(401)
