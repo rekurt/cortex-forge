@@ -1,0 +1,25 @@
+{
+  "id": "admin-dashboard",
+  "name": "Admin Dashboard",
+  "description": "Единый центр управления CortexForge: квоты, метрики, статусы, справка",
+  "params": {
+    "action": {
+      "type": "string",
+      "enum": ["overview", "instances", "set-limit", "reset-quota", "help"],
+      "required": true,
+      "description": "overview — сводка, instances — список инстансов, set-limit — изменить лимит, reset-quota — сбросить квоту, help — справочник"
+    },
+    "name": {
+      "type": "string",
+      "required": false,
+      "description": "Имя инстанса (для set-limit и reset-quota)"
+    },
+    "limit": {
+      "type": "integer",
+      "required": false,
+      "description": "Новый лимит токенов/мес (для set-limit)"
+    }
+  },
+  "timeout": 30,
+  "env_vars": ["QUOTA_ADMIN_TOKEN", "QUOTA_PROXY_URL", "MONITOR_URL", "BROKER_URL"]
+}
