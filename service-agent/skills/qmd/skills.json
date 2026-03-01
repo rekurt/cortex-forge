@@ -1,0 +1,25 @@
+{
+  "id": "qmd",
+  "name": "QMD — Markdown Search",
+  "description": "Быстрый полнотекстовый поиск по .md файлам: workspace, shared docs, skills",
+  "params": {
+    "query": {
+      "type": "string",
+      "required": true,
+      "description": "Поисковый запрос (текст или regex)"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["all", "workspace", "shared", "skills"],
+      "required": false,
+      "description": "Область поиска: all (по умолчанию), workspace, shared (docs + skills), skills"
+    },
+    "max_results": {
+      "type": "integer",
+      "required": false,
+      "description": "Максимум результатов (по умолчанию 10)"
+    }
+  },
+  "timeout": 15,
+  "env_vars": []
+}

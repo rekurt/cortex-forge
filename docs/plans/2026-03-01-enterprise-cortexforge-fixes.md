@@ -273,12 +273,12 @@ Broker хранит сообщения в collections.deque — при рест�
 - Create: `shared/skills/qmd/SKILL.md`
 - Modify: `docker-compose.yml` (volume mount для qmd)
 
-- [ ] Создать skills.json:
+- [x] Создать skills.json:
   - id: "qmd"
   - params: query (string, required), scope (enum: "all", "workspace", "shared", "skills", default: "all"), max_results (int, default: 10)
   - timeout: 15
   - env_vars: []
-- [ ] Создать run.py (Python stdlib, os.walk + re):
+- [x] Создать run.py (Python stdlib, os.walk + re):
   - Рекурсивный обход .md файлов в заданном scope:
     - "workspace": /home/node/.openclaw/workspace/
     - "shared": /shared/docs/ + /shared/skills/
@@ -288,12 +288,12 @@ Broker хранит сообщения в collections.deque — при рест�
   - Возвращает: [{file, line_number, context (3 строки вокруг), match_count}]
   - Ограничение: max_results (default 10), timeout 10 sec
   - Поддержка regex через re module
-- [ ] Создать shared/skills/qmd/SKILL.md:
+- [x] Создать shared/skills/qmd/SKILL.md:
   - Описание: быстрый поиск по документации и базе знаний
   - Примеры: поиск по ключевым словам, regex, фильтр по scope
   - Вызов через service-agent: POST /v1/run с skill_id=qmd
-- [ ] docker-compose.yml: убедиться что service-agent видит /shared/ volumes
-- [ ] Тест: найти "quota" по всем md файлам, проверить релевантность результатов
+- [x] docker-compose.yml: убедиться что service-agent видит /shared/ volumes
+- [x] Тест: найти "quota" по всем md файлам, проверить релевантность результатов
 
 ### Task 7: Инфраструктура личных скиллов (FEATURE)
 
