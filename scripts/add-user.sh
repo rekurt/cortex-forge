@@ -139,9 +139,9 @@ service = f"""
       - ../{name}-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
-      - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}
-      - OPENAI_API_KEY=${{OPENAI_API_KEY}}
+      - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
       - NODE_OPTIONS=--max-old-space-size=1024

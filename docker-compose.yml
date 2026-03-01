@@ -251,7 +251,7 @@ services:
       - BROKER_KEY=${BROKER_KEY_USER_1}
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     depends_on:
@@ -282,7 +282,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -317,7 +317,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     deploy:
