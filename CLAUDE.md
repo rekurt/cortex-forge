@@ -107,7 +107,7 @@ openclaw.json   # конфиг: Telegram-канал + модель
 
 1. Создать `service-agent/skills/<skill-name>/`
 2. Реализовать `run.py`: читает JSON из stdin, пишет JSON в stdout
-3. Добавить `skills.json` манифест (см. `compliance/skills.json` как образец)
+3. Добавить `skills.json` манифест (см. `compliance/skills.json` как образец). Если скиллу нужны секреты из окружения (API-ключи и т.п.), объяви их в поле `env_vars` — только они будут переданы в subprocess (`build_skill_env()` в `server.py`). Переменная также должна быть передана в контейнер `assistant-service` через `docker-compose.yml`.
 4. `docker compose build assistant-service && docker compose restart assistant-service`
 
 ## Code conventions
