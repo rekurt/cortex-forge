@@ -136,6 +136,7 @@ class Handler(BaseHTTPRequestHandler):
         if to == sender:
             self._json(400, {"error": "Cannot send to yourself"}); return
 
+        _cleanup()
         msg = {"from": sender, "to": to, "message": message[:MAX_MSG_BYTES], "ts": time.time()}
         with _lock:
             q = _inbox[to]
