@@ -69,7 +69,9 @@ services:
       - ./instances/admin/openclaw_data:/home/node/.openclaw
       - ../admin-workspace:/home/node/.openclaw/workspace
       - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
-      - ./shared/skills:/shared/skills:ro
+      - ./shared/skills:/shared/skills
+      - ./shared/docs:/shared/docs
+      - ./shared/compliance-data:/shared/compliance-data
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
       - ./instances:/infra/instances         # воркспейсы инстансов
       - ./scripts:/infra/scripts:ro          # скрипты управления (read-only)
@@ -107,7 +109,7 @@ services:
   #   volumes:
   #     - ./instances/user-1/workspace:/home/node/.openclaw/workspace
   #     - ./instances/user-1/openclaw.json:/home/node/.openclaw/openclaw.json
-  #     - ./shared/skills:/shared/skills:ro
+  #     - ./shared/skills:/shared/skills
   #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
   #   environment:
   #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}     # квота-ключ, не реальный
@@ -206,10 +208,11 @@ services:
     volumes:
       - ./instances/user-1/openclaw_data:/home/node/.openclaw
       - ../user-1-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
+      - ./shared/skills:/shared/skills
+      - ./shared/docs:/shared/docs
+      - ./shared/compliance-data:/shared/compliance-data
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}
-      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_USER_1}
     networks:
@@ -235,17 +238,23 @@ services:
     volumes:
       - ./instances/user-4/openclaw_data:/home/node/.openclaw
       - ../user-4-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
+      - ./shared/skills:/shared/skills
+      - ./shared/docs:/shared/docs
+      - ./shared/compliance-data:/shared/compliance-data
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_4}
-      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_USER_4}
+      - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
       - corp-egress
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -264,17 +273,23 @@ services:
     volumes:
       - ./instances/user-3/openclaw_data:/home/node/.openclaw
       - ../user-3-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
+      - ./shared/skills:/shared/skills
+      - ./shared/docs:/shared/docs
+      - ./shared/compliance-data:/shared/compliance-data
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_3}
-      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_USER_3}
+      - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
       - corp-egress
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     depends_on:
       quota-proxy:
         condition: service_healthy

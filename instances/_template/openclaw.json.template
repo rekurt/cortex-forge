@@ -25,6 +25,17 @@
             "maxTokens": 16000
           }
         ]
+      },
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "${OPENAI_API_KEY}",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "whisper-1",
+            "name": "Whisper"
+          }
+        ]
       }
     }
   },
@@ -76,6 +87,23 @@
         "-y",
         "context-mode"
       ]
+    }
+  },
+  "tools": {
+    "media": {
+      "audio": {
+        "enabled": true,
+        "models": [
+          {
+            "provider": "openai",
+            "model": "whisper-1",
+            "capabilities": [
+              "audio"
+            ],
+            "type": "provider"
+          }
+        ]
+      }
     }
   }
 }
