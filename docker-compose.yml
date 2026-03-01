@@ -1,7 +1,7 @@
 services:
 
   # ════════════════════════════════════════════════════
-  # QUOTA PROXY — единственное место с реальным API-ключом
+  # CortexForge Proxy — единственное место с реальным API-ключом
   # Hardened: нет проброса портов наружу, resource limits
   # ════════════════════════════════════════════════════
   quota-proxy:
@@ -14,8 +14,8 @@ services:
       - QUOTA_PORT=9090
     volumes:
       - quota-data:/data
-    # ⚠️ Порт НЕ пробрасывается наружу — только внутри corp-internal
-    # Управление квотами — только через admin-контейнер
+    ports:
+      - "127.0.0.1:9090:9090"   # quota dashboard — только localhost
     # corp-egress нужен для форвардинга запросов в api.anthropic.com
     networks:
       - corp-internal
@@ -26,6 +26,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health', timeout=3)"]
@@ -50,6 +55,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
@@ -66,9 +76,8 @@ services:
     restart: unless-stopped
     env_file: instances/admin/.env
     volumes:
-      - ./instances/admin/openclaw_data:/home/node/.openclaw
-      - ../admin-workspace:/home/node/.openclaw/workspace
-      - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
+      - ./instances/admin/workspace:/home/node/.openclaw/workspace
+      - ./instances/admin/openclaw.json:/home/node/.openclaw/openclaw.json
       - ./shared/skills:/shared/skills:ro
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
       - ./instances:/infra/instances         # воркспейсы инстансов
@@ -81,12 +90,20 @@ services:
       - BROKER_KEY=${BROKER_KEY_ADMIN}
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+      - NODE_OPTIONS=--max-old-space-size=1536
+    ports:
+      - "127.0.0.1:18789:18789"   # OpenClaw Control UI — http://localhost:18789
     networks:
       - corp-internal
-      - corp-egress
       - corp-admin
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -105,22 +122,24 @@ services:
   #   restart: unless-stopped
   #   env_file: instances/nikita/.env
   #   volumes:
-  #     - ./instances/nikita/workspace:/home/node/.openclaw/workspace
-  #     - ./instances/nikita/openclaw.json:/home/node/.openclaw/openclaw.json
+  #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
+  #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
   #     - ./shared/skills:/shared/skills:ro
   #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
   #   environment:
-  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}     # квота-ключ, не реальный
+  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}     # квота-ключ, не реальный
+  #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
   #     - BROKER_URL=http://message-broker:8080
   #     - BROKER_KEY=${BROKER_KEY_NIKITA}
   #   networks:
   #     - corp-internal   # broker + quota-proxy, но НЕ corp-admin
+  #     - corp-outbound   # Telegram API + внешние вызовы
   #   security_opt:
   #     - no-new-privileges:true
   #   deploy:
   #     resources:
   #       limits:
-  #         cpus: "1.0"
+  #         cpus: "2.0"
   #         memory: 1G
   #   depends_on:
   #     quota-proxy:
@@ -144,11 +163,18 @@ services:
     volumes:
       - monitor-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:9091:9091"   # monitor dashboard — только localhost
     networks:
       - corp-internal
       - corp-admin
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -181,8 +207,6 @@ services:
     volumes:
       - service-data:/data
       - ./service-agent/skills:/app/skills:ro
-      # enrich.py монтируется с хоста — не нужна пересборка образа при обновлении
-      - ${ENRICH_PY_PATH:-./service-agent/skills/compliance/enrich_placeholder.py}:/app/skills/compliance/enrich.py:ro
     ports:
       - "127.0.0.1:8090:8090"   # только localhost — nginx/reverse-proxy закроет снаружи
     networks:
@@ -190,99 +214,17 @@ services:
       - corp-services
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8090/v1/health', timeout=3)"]
       interval: 30s
       timeout: 5s
       retries: 3
-
-  assistant-nikita:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: corp-nikita
-    restart: unless-stopped
-    env_file:
-      - instances/nikita/.env
-    volumes:
-      - ./instances/nikita/openclaw_data:/home/node/.openclaw
-      - ../nikita-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
-    environment:
-      - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}
-      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
-      - BROKER_URL=http://message-broker:8080
-      - BROKER_KEY=${BROKER_KEY_NIKITA}
-    networks:
-      - corp-internal
-      - corp-egress
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      quota-proxy:
-        condition: service_healthy
-      message-broker:
-        condition: service_healthy
-    labels:
-      corp.assistant.role: personal
-      corp.assistant.user: nikita
-
-  assistant-vasily:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: corp-vasily
-    restart: unless-stopped
-    env_file:
-      - instances/vasily/.env
-    volumes:
-      - ./instances/vasily/openclaw_data:/home/node/.openclaw
-      - ../vasily-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
-    environment:
-      - ANTHROPIC_API_KEY=${QUOTA_KEY_VASILY}
-      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
-      - BROKER_URL=http://message-broker:8080
-      - BROKER_KEY=${BROKER_KEY_VASILY}
-    networks:
-      - corp-internal
-      - corp-egress
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      quota-proxy:
-        condition: service_healthy
-      message-broker:
-        condition: service_healthy
-    labels:
-      corp.assistant.role: personal
-      corp.assistant.user: vasily
-
-  assistant-dmitry:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: corp-dmitry
-    restart: unless-stopped
-    env_file:
-      - instances/dmitry/.env
-    volumes:
-      - ./instances/dmitry/openclaw_data:/home/node/.openclaw
-      - ../dmitry-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
-    environment:
-      - ANTHROPIC_API_KEY=${QUOTA_KEY_DMITRY}
-      - ANTHROPIC_BASE_URL=http://quota-proxy:9090
-      - BROKER_URL=http://message-broker:8080
-      - BROKER_KEY=${BROKER_KEY_DMITRY}
-    networks:
-      - corp-internal
-      - corp-egress
-    security_opt:
-      - no-new-privileges:true
-    depends_on:
-      quota-proxy:
-        condition: service_healthy
-      message-broker:
-        condition: service_healthy
-    labels:
-      corp.assistant.role: personal
-      corp.assistant.user: dmitry
 
 volumes:
   quota-data:
@@ -314,3 +256,9 @@ networks:
   corp-egress:
     driver: bridge
     # Нет internal: true — quota-proxy форвардит запросы в api.anthropic.com
+
+  # Сеть для внешних API инстансов (Telegram, etc.)
+  # Anthropic-запросы всё равно идут через quota-proxy (QUOTA_KEY не работает напрямую)
+  corp-outbound:
+    driver: bridge
+    # Нет internal: true — инстансы могут ходить в Telegram API и др.

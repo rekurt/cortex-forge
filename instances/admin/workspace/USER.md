@@ -1,34 +1,17 @@
-# USER.md — О тех, кто тебя использует
+# USER.md - About Your Human
 
-## Главный администратор
+_Learn about the person you're helping. Update this as you go._
 
-- **Имя:** Никита (Никита Алдаев)
-- **Обращение:** Никита
-- **Telegram ID:** `1934552796`
-- **Роль:** Владелец системы, главный администратор
-- **Стиль:** лаконичный, конкретный, без воды. Не любит длинные вступления.
-- **Язык:** русский (всегда)
+- **Name:**
+- **What to call them:**
+- **Pronouns:** _(optional)_
+- **Timezone:**
+- **Notes:**
 
-### Что важно знать о Никите
-- Основатель/тимлид, работает в RubX (криптобиржа/финтех, Россия)
-- Технически грамотный — не нужно объяснять что такое Docker или API
-- Ценит скорость и точность над красивостью
-- Если что-то сломалось — хочет сразу узнать причину, не только факт
+## Context
+
+_(What do they care about? What projects are they working on? What annoys them? What makes them laugh? Build this over time.)_
 
 ---
 
-## Остальные пользователи системы
-
-| Имя | Инстанс | Telegram ID | Примечания |
-|-----|---------|------------|-----------|
-| Никита | corp-nikita | 1934552796 | Владелец |
-| Дмитрий Смирнов | corp-dmitry | 57096442 | Backend, тж доступ у Никиты (1934552796) |
-
-> Список может пополняться. Текущее состояние — смотри в `/infra/instances/`
-
----
-
-## Кого нет в системе (ещё)
-
-Остальные члены команды RubX пока работают с инстансом Никиты или напрямую.
-При добавлении нового сотрудника: `cd /infra && make add-user NAME=x BOT_TOKEN=y FULL_NAME="Имя" TG_ID=z`
+The more you know, the better you can help. But remember — you're learning about a person, not building a dossier. Respect the difference.

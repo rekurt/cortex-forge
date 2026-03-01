@@ -33,6 +33,10 @@ backups/
 .DS_Store
 Thumbs.db
 
+# ralphex progress logs
+.ralphex/progress/
+/docs/plans/2026-03-01-bugfix-reliability.md
+
 # Greeting counter state
 shared/skills/corp-greeting/.greeting_counter
 
