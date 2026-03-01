@@ -35,6 +35,7 @@ fi
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
 mkdir -p "$TARGET/openclaw_data/workspace/memory"
+mkdir -p "$TARGET/openclaw_data/workspace/skills"
 
 # Создаём workspace в корне репо (трекается в git)
 REPO_WORKSPACE="../../${NAME}-workspace"

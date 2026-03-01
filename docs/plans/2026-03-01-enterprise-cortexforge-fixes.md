@@ -306,11 +306,11 @@ workspace/skills/ для персональных навыков.
 - Modify: `instances/_template/workspace/TOOLS.md` (документировать personal skills)
 - Modify: `shared/docs/common/SKILLS.md` (если существует; иначе создать — документировать personal vs shared)
 
-- [ ] Создать instances/_template/workspace/skills/.gitkeep
-- [ ] В add-user.sh: добавить mkdir -p для skills/ в workspace
-- [ ] Обновить шаблон TOOLS.md: добавить секцию "Личные скиллы" — инструкция как создать SKILL.md в workspace/skills/
-- [ ] Документировать в shared/docs: "Personal vs Shared Skills" — где что, приоритет загрузки
-- [ ] Тест: создать тестовый personal skill в workspace/skills/, убедиться что OpenClaw его видит
+- [x] Создать instances/_template/workspace/skills/.gitkeep
+- [x] В add-user.sh: добавить mkdir -p для skills/ в workspace
+- [x] Обновить шаблон TOOLS.md: добавить секцию "Личные скиллы" — инструкция как создать SKILL.md в workspace/skills/
+- [x] Документировать в shared/docs: "Personal vs Shared Skills" — где что, приоритет загрузки
+- [x] Тест: создать тестовый personal skill в workspace/skills/, убедиться что OpenClaw его видит
 
 ### Task 8: Финальная проверка и документация (VERIFICATION)
 
