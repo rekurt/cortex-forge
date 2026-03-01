@@ -69,6 +69,13 @@
         "--oauth2Bearer",
         ":"
       ]
+    },
+    "context-mode": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "context-mode"
+      ]
     }
   }
 }
