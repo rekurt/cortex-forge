@@ -48,6 +48,9 @@ services:
     env_file: .env
     environment:
       - BROKER_PORT=8080
+      - BROKER_DB=/data/broker.db
+    volumes:
+      - broker-data:/data
     networks:
       - corp-internal
     security_opt:
@@ -337,6 +340,8 @@ services:
 
 volumes:
   quota-data:
+    driver: local
+  broker-data:
     driver: local
   monitor-data:
     driver: local

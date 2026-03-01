@@ -206,21 +206,21 @@ Broker хранит сообщения в collections.deque — при рест�
 - Modify: `broker/Dockerfile` (добавить /data volume point)
 - Modify: `docker-compose.yml` (добавить broker-data volume)
 
-- [ ] Добавить SQLite storage в broker.py:
+- [x] Добавить SQLite storage в broker.py:
   - Таблица: messages (id INTEGER PK AUTOINCREMENT, sender TEXT, recipient TEXT, body TEXT, ts REAL)
   - WAL mode, journal_size_limit, CREATE TABLE IF NOT EXISTS при старте
   - DB path из env: BROKER_DB (default: /data/broker.db)
-- [ ] Заменить _inbox defaultdict(deque) на SQLite операции:
+- [x] Заменить _inbox defaultdict(deque) на SQLite операции:
   - send: INSERT INTO messages
   - inbox: SELECT * WHERE recipient=? AND ts > cutoff ORDER BY ts LIMIT MAX_INBOX
   - clear: DELETE WHERE recipient=?
   - health: добавить count per recipient
-- [ ] _cleanup(): DELETE WHERE ts < cutoff (вместо deque iteration)
-- [ ] MAX_INBOX enforcement: после INSERT — DELETE overflow
-- [ ] docker-compose.yml:
+- [x] _cleanup(): DELETE WHERE ts < cutoff (вместо deque iteration)
+- [x] MAX_INBOX enforcement: после INSERT — DELETE overflow
+- [x] docker-compose.yml:
   - Добавить volume broker-data:/data
   - Добавить BROKER_DB=/data/broker.db в environment
-- [ ] Тест: отправить сообщения, docker compose restart message-broker, проверить что inbox сохранился
+- [x] Тест: отправить сообщения, docker compose restart message-broker, проверить что inbox сохранился
 
 ### Task 5: Admin dashboard skill с обширной базой знаний (MANAGEMENT)
 
