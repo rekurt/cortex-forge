@@ -129,11 +129,11 @@
 
 ### Task 9: Проверка и финализация
 
-- [ ] docker compose down && docker compose up -d --build — полный пересборка
-- [ ] docker compose ps — все контейнеры Running
-- [ ] проверить логи каждого компонента: docker compose logs quota-proxy broker resource-monitor service-agent
-- [ ] make monitor — убедиться что метрики отдаются
-- [ ] make service-health — убедиться что service-agent работает
-- [ ] make quota-report — убедиться что отчёт формируется корректно
-- [ ] обновить CLAUDE.md если изменились паттерны безопасности
-- [ ] переместить план в docs/plans/completed/
+- [x] docker compose down && docker compose up -d --build — полный пересборка
+- [x] docker compose ps — все контейнеры Running
+- [x] проверить логи каждого компонента: docker compose logs quota-proxy broker resource-monitor service-agent
+- [x] make monitor — убедиться что метрики отдаются
+- [x] make service-health — убедиться что service-agent работает
+- [x] make quota-report — убедиться что отчёт формируется корректно
+- [x] обновить CLAUDE.md если изменились паттерны безопасности
+- [x] переместить план в docs/plans/completed/
