@@ -20,6 +20,12 @@ TARGET="instances/$NAME"
 
 [ -d "$TARGET" ] && echo "❌ Инстанс '$NAME' уже существует" && exit 1
 
+# Проверяем существование директории шаблона
+if [ ! -d "$TEMPLATE/workspace" ]; then
+  echo "❌ Директория шаблона не найдена: $TEMPLATE/workspace"
+  exit 1
+fi
+
 # Валидация имени: только a-z0-9-_ (защита от shell injection и path traversal)
 if ! echo "$NAME" | grep -qE '^[a-z][a-z0-9_-]{1,31}$'; then
   echo "❌ Недопустимое имя '$NAME'. Только a-z, 0-9, -, _ (2-32 символа, начинается с буквы)"
@@ -28,7 +34,8 @@ fi
 
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
-mkdir -p "/openclaw_data/workspace/memory"
+mkdir -p "$TARGET/openclaw_data/workspace/memory"
+mkdir -p "$TARGET/openclaw_data/workspace/skills"
 
 # Создаём workspace в корне репо (трекается в git)
 REPO_WORKSPACE="../../${NAME}-workspace"
@@ -44,7 +51,15 @@ GITEOF
 fi
 
 # Копируем шаблоны воркспейса
-cp -r "$TEMPLATE/workspace/"* "$TARGET/openclaw_data/workspace/"
+# Используем явный массив для проверки наличия файлов (защита от пустого glob)
+shopt -s nullglob
+TEMPLATE_FILES=("$TEMPLATE/workspace/"*)
+shopt -u nullglob
+if [ ${#TEMPLATE_FILES[@]} -eq 0 ]; then
+  echo "⚠️  В директории шаблона нет файлов: $TEMPLATE/workspace — пропускаем копирование"
+else
+  cp -r "${TEMPLATE_FILES[@]}" "$TARGET/openclaw_data/workspace/"
+fi
 # Используем Python для подстановки — безопасно для спецсимволов в FULL_NAME (/, &, \)
 python3 -c "
 import sys, pathlib
@@ -125,9 +140,9 @@ service = f"""
       - ../{name}-workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
-      - ANTHROPIC_API_KEY=${{ANTHROPIC_API_KEY}}
-      - OPENAI_API_KEY=${{OPENAI_API_KEY}}
+      - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
       - NODE_OPTIONS=--max-old-space-size=1024
