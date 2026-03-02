@@ -168,8 +168,6 @@ def _drop_privileges(user: str = "app"):
     print(f"[quota] Dropped privileges: uid={uid} gid={gid} ({user})", flush=True)
 
 
-def _now(): return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
 _drop_privileges()   # ← вызываем ДО открытия БД (чтобы открыть с правильным uid)
 _conn = _init_db()
 

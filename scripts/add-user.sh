@@ -10,6 +10,24 @@ FULL_NAME="${3:-$NAME}"
 TG_ID="${4:-}"
 UI_PORT="${5:-}"
 
+# Валидация имени: только a-z0-9-_ (защита от shell injection и path traversal)
+if ! echo "$NAME" | grep -qE '^[a-z][a-z0-9_-]{1,31}$'; then
+  echo "❌ Недопустимое имя '$NAME'. Только a-z, 0-9, -, _ (2-32 символа, начинается с буквы)"
+  exit 1
+fi
+
+# Валидация BOT_TOKEN: стандартный формат Telegram bot token (digits:alnum)
+if [ -n "$BOT_TOKEN" ] && ! echo "$BOT_TOKEN" | grep -qE '^[0-9]+:[A-Za-z0-9_-]+$'; then
+  echo "❌ Недопустимый формат BOT_TOKEN. Ожидается: digits:alphanumeric"
+  exit 1
+fi
+
+# Валидация TG_ID: только цифры (Telegram user ID)
+if [ -n "$TG_ID" ] && ! echo "$TG_ID" | grep -qE '^[0-9]+$'; then
+  echo "❌ Недопустимый формат TG_ID. Ожидается числовой Telegram user ID"
+  exit 1
+fi
+
 # Авто-порт: считаем существующие инстансы и берём 18790+N
 if [ -z "$UI_PORT" ]; then
   INSTANCE_COUNT=$(find instances -mindepth 1 -maxdepth 1 -type d ! -name "_template" ! -name "admin" | wc -l | tr -d ' ')
@@ -23,12 +41,6 @@ TARGET="instances/$NAME"
 # Проверяем существование директории шаблона
 if [ ! -d "$TEMPLATE/workspace" ]; then
   echo "❌ Директория шаблона не найдена: $TEMPLATE/workspace"
-  exit 1
-fi
-
-# Валидация имени: только a-z0-9-_ (защита от shell injection и path traversal)
-if ! echo "$NAME" | grep -qE '^[a-z][a-z0-9_-]{1,31}$'; then
-  echo "❌ Недопустимое имя '$NAME'. Только a-z, 0-9, -, _ (2-32 символа, начинается с буквы)"
   exit 1
 fi
 

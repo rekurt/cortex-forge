@@ -49,14 +49,19 @@ class TestCliproxyapiConfig(unittest.TestCase):
 
     def test_no_hardcoded_api_key(self):
         """API key must come from env variable, not be hardcoded."""
-        lines = [l for l in self.config.splitlines()
-                 if "api-keys" not in l and l.strip().startswith("-")]
-        for line in lines:
-            # Lines under api-keys should use ${...} placeholder
-            if "CLIPROXY_API_KEY" not in line:
+        in_api_keys = False
+        for line in self.config.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("api-keys:"):
+                in_api_keys = True
                 continue
-            self.assertIn("${", line,
-                          "api key should use env variable substitution")
+            # End of api-keys block when a new top-level key starts
+            if in_api_keys and stripped and not stripped.startswith("-") and not stripped.startswith("#"):
+                in_api_keys = False
+            if in_api_keys and stripped.startswith("-"):
+                # Every entry under api-keys must use ${...} env substitution
+                self.assertIn("${", stripped,
+                              f"api key entry should use env variable substitution, got: {stripped}")
 
 
 class TestDockerComposeCliproxyapi(unittest.TestCase):
@@ -83,14 +88,30 @@ class TestDockerComposeCliproxyapi(unittest.TestCase):
         block = match.group()
         self.assertIn("corp-egress", block)
 
-    def test_cliproxyapi_in_corp_internal(self):
+    def test_cliproxyapi_not_in_corp_internal(self):
+        """cliproxyapi must NOT be on corp-internal to prevent quota-proxy bypass."""
         match = re.search(
             r'cliproxyapi:.*?(?=^\s{2}\w|\Z)',
             self.compose, re.DOTALL | re.MULTILINE
         )
         self.assertIsNotNone(match)
         block = match.group()
-        self.assertIn("corp-internal", block)
+        # Collect network lines from the networks section of cliproxyapi block
+        in_networks = False
+        network_lines = []
+        for line in block.splitlines():
+            stripped = line.strip()
+            if stripped == "networks:":
+                in_networks = True
+                continue
+            if in_networks:
+                if stripped.startswith("- "):
+                    network_lines.append(stripped)
+                elif stripped and not stripped.startswith("#"):
+                    break
+        network_text = " ".join(network_lines)
+        self.assertNotIn("corp-internal", network_text,
+                          "cliproxyapi must NOT be on corp-internal (instances could bypass quota-proxy)")
 
     def test_cliproxyapi_no_exposed_ports(self):
         """cliproxyapi must NOT expose ports to host."""
@@ -106,6 +127,17 @@ class TestDockerComposeCliproxyapi(unittest.TestCase):
 
     def test_cliproxyapi_config_volume(self):
         self.assertIn("cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml", self.compose)
+
+    def test_cliproxyapi_security_opt(self):
+        """cliproxyapi must have no-new-privileges security option."""
+        match = re.search(
+            r'cliproxyapi:.*?(?=^\s{2}\w|\Z)',
+            self.compose, re.DOTALL | re.MULTILINE
+        )
+        self.assertIsNotNone(match)
+        block = match.group()
+        self.assertIn("no-new-privileges", block,
+                       "cliproxyapi must have no-new-privileges:true")
 
     def test_cliproxyapi_auths_volume(self):
         self.assertIn("cliproxyapi-auths", self.compose)

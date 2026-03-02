@@ -112,7 +112,9 @@ instances/<name>/workspace/
   SOUL.md       # персонаж и стиль общения
   IDENTITY.md   # имя, эмодзи, вайб
   USER.md       # контекст сотрудника (роль, часовой пояс)
+  TOOLS.md      # инструкции по инструментам и личным скиллам
   AGENTS.md     # доступные агенты
+  skills/       # личные скиллы (приоритет над shared)
   memory/       # долгосрочная память
 openclaw.json   # конфиг: Telegram-канал + модель
 ```
@@ -146,6 +148,7 @@ openclaw.json   # конфиг: Telegram-канал + модель
 - `QUOTA_ADMIN_TOKEN` — 32+ символов
 - `QUOTA_KEY_<NAME>`, `QUOTA_LIMIT_<NAME>`, `BROKER_KEY_<NAME>` — генерируются скриптом `add-user.sh`
 - `BROKER_KEY_SERVICE` — ключ service-agent для доступа к broker (corp-messenger skill)
+- `BROKER_KEY_MONITOR` — ключ resource-monitor для отправки алертов в broker
 - `SERVICE_API_KEY` — ключ для авторизации запросов к service-agent API
 
 Переменные инстанса в `instances/<name>/.env`:
