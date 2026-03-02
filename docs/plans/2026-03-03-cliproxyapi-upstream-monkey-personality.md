@@ -90,12 +90,12 @@
 
 ### Task 4: Verify acceptance criteria
 
-- [ ] Manual test: docker compose config --services показывает cliproxyapi
-- [ ] Manual test: quota-proxy использует configurable UPSTREAM_URL
-- [ ] Manual test: SOUL.md содержит инструкции про workaround'ы и участливый тон
-- [ ] Run full test suite
-- [ ] Run linter (shellcheck scripts/*.sh)
-- [ ] Run security check (python3 .github/scripts/ai_security_check.py)
+- [x] Manual test: docker compose config --services показывает cliproxyapi
+- [x] Manual test: quota-proxy использует configurable UPSTREAM_URL
+- [x] Manual test: SOUL.md содержит инструкции про workaround'ы и участливый тон
+- [x] Run full test suite
+- [x] Run linter (shellcheck scripts/*.sh)
+- [x] Run security check (python3 .github/scripts/ai_security_check.py)
 
 ### Task 5: Update documentation
 
