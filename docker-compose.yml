@@ -1,7 +1,7 @@
 services:
 
   # ════════════════════════════════════════════════════
-  # QUOTA PROXY — единственное место с реальным API-ключом
+  # CortexForge Proxy — единственное место с реальным API-ключом
   # Hardened: нет проброса портов наружу, resource limits
   # ════════════════════════════════════════════════════
   quota-proxy:
@@ -14,8 +14,8 @@ services:
       - QUOTA_PORT=9090
     volumes:
       - quota-data:/data
-    # ⚠️ Порт НЕ пробрасывается наружу — только внутри corp-internal
-    # Управление квотами — только через admin-контейнер
+    ports:
+      - "127.0.0.1:9090:9090"   # quota dashboard — только localhost
     # corp-egress нужен для форвардинга запросов в api.anthropic.com
     networks:
       - corp-internal
@@ -26,6 +26,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1G
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:9090/quota/health', timeout=3)"]
@@ -43,6 +48,9 @@ services:
     env_file: .env
     environment:
       - BROKER_PORT=8080
+      - BROKER_DB=/data/broker.db
+    volumes:
+      - broker-data:/data
     networks:
       - corp-internal
     security_opt:
@@ -50,6 +58,11 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 30s
@@ -67,11 +80,12 @@ services:
     env_file: instances/admin/.env
     volumes:
       - ./instances/admin/openclaw_data:/home/node/.openclaw
-      - ../admin-workspace:/home/node/.openclaw/workspace
       - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
-      - ./shared/skills:/shared/skills
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data
+      - ./instances/admin/workspace:/home/node/.openclaw/workspace
+      - ./instances/admin/openclaw.json:/home/node/.openclaw/openclaw.json
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
       - ./instances:/infra/instances         # воркспейсы инстансов
       - ./scripts:/infra/scripts:ro          # скрипты управления (read-only)
@@ -83,12 +97,20 @@ services:
       - BROKER_KEY=${BROKER_KEY_ADMIN}
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+      - NODE_OPTIONS=--max-old-space-size=1536
+    ports:
+      - "127.0.0.1:18789:18789"   # OpenClaw Control UI — http://localhost:18789
     networks:
       - corp-internal
-      - corp-egress
       - corp-admin
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -107,22 +129,24 @@ services:
   #   restart: unless-stopped
   #   env_file: instances/user-1/.env
   #   volumes:
-  #     - ./instances/user-1/workspace:/home/node/.openclaw/workspace
-  #     - ./instances/user-1/openclaw.json:/home/node/.openclaw/openclaw.json
+  #     - ./instances/user-1/workspace:/home/user/.openclaw/workspace
+  #     - ./instances/user-1/openclaw.json:/home/user/.openclaw/openclaw.json:ro
   #     - ./shared/skills:/shared/skills
   #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
   #   environment:
-  #     - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}     # квота-ключ, не реальный
+  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}     # квота-ключ, не реальный
+  #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
   #     - BROKER_URL=http://message-broker:8080
   #     - BROKER_KEY=${BROKER_KEY_USER_1}
   #   networks:
   #     - corp-internal   # broker + quota-proxy, но НЕ corp-admin
+  #     - corp-outbound   # Telegram API + внешние вызовы
   #   security_opt:
   #     - no-new-privileges:true
   #   deploy:
   #     resources:
   #       limits:
-  #         cpus: "1.0"
+  #         cpus: "2.0"
   #         memory: 1G
   #   depends_on:
   #     quota-proxy:
@@ -146,11 +170,20 @@ services:
     volumes:
       - monitor-data:/data
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:9091:9091"   # monitor dashboard — только localhost
     networks:
       - corp-internal
       - corp-admin
     security_opt:
       - no-new-privileges:true
+    group_add:
+      - "${DOCKER_GID:-999}"   # docker group GID — нужен для доступа к /var/run/docker.sock под non-root
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -180,11 +213,17 @@ services:
       - MAX_CONCURRENT_TASKS=5
       - DADATA_API_KEY=${DADATA_API_KEY:-}
       - DADATA_SECRET=${DADATA_SECRET:-}
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_SERVICE}
+      - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+      - QUOTA_PROXY_URL=http://quota-proxy:9090
+      - MONITOR_URL=http://resource-monitor:9091
+      - MONITOR_ADMIN_TOKEN=${MONITOR_ADMIN_TOKEN:-}
     volumes:
       - service-data:/data
       - ./service-agent/skills:/app/skills:ro
-      # enrich.py монтируется с хоста — не нужна пересборка образа при обновлении
-      - ${ENRICH_PY_PATH:-./service-agent/skills/compliance/enrich_placeholder.py}:/app/skills/compliance/enrich.py:ro
+      - ./shared/skills:/shared/skills:ro
+      - ./shared/docs:/shared/docs:ro
     ports:
       - "127.0.0.1:8090:8090"   # только localhost — nginx/reverse-proxy закроет снаружи
     networks:
@@ -192,6 +231,11 @@ services:
       - corp-services
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
     healthcheck:
       test: ["CMD", "python3", "-c",
              "import urllib.request; urllib.request.urlopen('http://localhost:8090/v1/health', timeout=3)"]
@@ -208,18 +252,23 @@ services:
     volumes:
       - ./instances/user-1/openclaw_data:/home/node/.openclaw
       - ../user-1-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_USER_1}
+      - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -238,9 +287,9 @@ services:
     volumes:
       - ./instances/user-4/openclaw_data:/home/node/.openclaw
       - ../user-4-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_4}
       - BROKER_URL=http://message-broker:8080
@@ -248,7 +297,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -273,9 +322,9 @@ services:
     volumes:
       - ./instances/user-3/openclaw_data:/home/node/.openclaw
       - ../user-3-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_3}
       - BROKER_URL=http://message-broker:8080
@@ -283,7 +332,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -301,6 +350,8 @@ services:
 
 volumes:
   quota-data:
+    driver: local
+  broker-data:
     driver: local
   monitor-data:
     driver: local
@@ -329,3 +380,9 @@ networks:
   corp-egress:
     driver: bridge
     # Нет internal: true — quota-proxy форвардит запросы в api.anthropic.com
+
+  # Сеть для внешних API инстансов (Telegram, etc.)
+  # Anthropic-запросы всё равно идут через quota-proxy (QUOTA_KEY не работает напрямую)
+  corp-outbound:
+    driver: bridge
+    # Нет internal: true — инстансы могут ходить в Telegram API и др.

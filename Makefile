@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks
+.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -101,3 +101,10 @@ service-health: ## Проверить health service-инстанса
 
 service-skills: ## Показать доступные скиллы service-инстанса
 	@curl -sf -H "Authorization: Bearer $${SERVICE_API_KEY}" http://localhost:8090/v1/skills | python3 -m json.tool
+
+admin-overview: ## Сводка admin-dashboard: квоты + метрики + алерты
+	@curl -sf -X POST http://localhost:8090/v1/run \
+	  -H "Authorization: Bearer $${SERVICE_API_KEY}" \
+	  -H "Content-Type: application/json" \
+	  -d '{"skill": "admin-dashboard", "caller": "makefile", "params": {"action": "overview"}}' \
+	  | python3 -m json.tool

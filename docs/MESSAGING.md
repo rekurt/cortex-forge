@@ -60,7 +60,7 @@ curl -X DELETE http://message-broker:8080/inbox \
 
 ```bash
 curl http://message-broker:8080/health
-# → {"status":"ok"}
+# → {"status":"ok","instances":["admin","user-1",...],"message_counts":{"admin":2}}
 ```
 
 ---
@@ -79,7 +79,7 @@ curl http://message-broker:8080/health
 
 ## Ограничения текущей версии
 
-- **In-memory** — сообщения не переживают рестарт брокера. При необходимости persistence замените `deque` в `broker.py` на SQLite.
+- **SQLite persistence** — сообщения переживают рестарт брокера (WAL mode). Retention: 24 часа (MAX_AGE_SEC = 86400).
 - **Нет push** — инстанс сам опрашивает inbox (polling по запросу пользователя или через heartbeat).
 - **Нет истории** — только текущие непрочитанные сообщения.
 - **Нет ACK** — прочитанные сообщения удаляются только явным `DELETE /inbox`.
