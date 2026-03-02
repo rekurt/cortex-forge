@@ -63,7 +63,8 @@ make service-skills                    # список скиллов
 
 | Компонент | Путь | Назначение |
 |-----------|------|------------|
-| `quota-proxy` | `quota-proxy/proxy.py` | Единственный держатель `ANTHROPIC_API_KEY`; квотирование, rate-limit, аудит |
+| `cliproxyapi` | `cliproxyapi/config.yaml` | OAuth-прокси для Claude Max; позволяет использовать подписку вместо API-ключа |
+| `quota-proxy` | `quota-proxy/proxy.py` | Квотирование, rate-limit, аудит; форвардит запросы через configurable upstream (CLIProxyAPI или напрямую в Anthropic API) |
 | `broker` | `broker/broker.py` | Шина сообщений между инстансами (SQLite persistence) |
 | `resource-monitor` | `resource-monitor/monitor.py` | Метрики Docker-контейнеров, алерты в broker |
 | `service-agent` | `service-agent/server.py` | HTTP API для вызова скиллов (stdin→stdout JSON) |
@@ -87,13 +88,13 @@ make service-skills                    # список скиллов
 
 Пять сетей Docker с намеренной изоляцией:
 
-- **`corp-egress`** — только `quota-proxy` имеет выход в интернет (к `api.anthropic.com`)
+- **`corp-egress`** — `quota-proxy` + `cliproxyapi` имеют выход в интернет (CLIProxyAPI → OAuth Anthropic, quota-proxy → CLIProxyAPI или напрямую в `api.anthropic.com`)
 - **`corp-internal`** (`internal: true`) — все инстансы + broker; нет внешнего роутинга
 - **`corp-admin`** (`internal: true`) — quota-proxy + monitor; нет внешнего роутинга
 - **`corp-services`** — service-agent (backend-интеграции)
 - **`corp-outbound`** — admin + инстансы (Telegram, внешние API)
 
-**Ключевой принцип:** инстансы не могут напрямую достучаться до Anthropic API. Все запросы идут через `quota-proxy`, который подставляет реальный ключ.
+**Ключевой принцип:** инстансы не могут напрямую достучаться до Anthropic API. Все запросы идут через `quota-proxy`, который форвардит их в configurable upstream — по умолчанию через `CLIProxyAPI` (OAuth), но может работать напрямую с `api.anthropic.com`.
 
 ### Security model
 
@@ -140,7 +141,8 @@ openclaw.json   # конфиг: Telegram-канал + модель
 ## Configuration
 
 Переменные в корневом `.env` (шаблон: `.env.example`):
-- `ANTHROPIC_API_KEY` — только здесь, только для `quota-proxy`
+- `ANTHROPIC_API_KEY` — опционален при использовании CLIProxyAPI; fallback для прямого доступа к Anthropic API
+- `CLIPROXY_API_KEY` — ключ авторизации quota-proxy → CLIProxyAPI (генерируется: `python3 -c "import secrets; print('clip-' + secrets.token_urlsafe(24))"`)
 - `QUOTA_ADMIN_TOKEN` — 32+ символов
 - `QUOTA_KEY_<NAME>`, `QUOTA_LIMIT_<NAME>`, `BROKER_KEY_<NAME>` — генерируются скриптом `add-user.sh`
 - `BROKER_KEY_SERVICE` — ключ service-agent для доступа к broker (corp-messenger skill)
