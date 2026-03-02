@@ -377,7 +377,9 @@ def poll_once():
     write_snapshots(metrics)
     check_alerts(metrics, disk, quota)
 
-    log.info(f"Poll done: {len(metrics)} containers, disk={disk.get('used_pct', '?'):.1f}%")
+    disk_pct = disk.get('used_pct')
+    disk_str = f"{disk_pct:.1f}%" if disk_pct is not None else "N/A"
+    log.info(f"Poll done: {len(metrics)} containers, disk={disk_str}")
 
 
 def polling_loop():

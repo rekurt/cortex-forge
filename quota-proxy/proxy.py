@@ -442,7 +442,7 @@ class Handler(BaseHTTPRequestHandler):
                 resp_body, resp_status = r.read(), r.status
                 resp_ct = r.headers.get("Content-Type", "application/json")
         except HTTPError as e:
-            resp_body, resp_status, resp_ct = e.read(), e.code, "application/json"
+            resp_body, resp_status, resp_ct = e.read(), e.code, e.headers.get("Content-Type", "application/json")
         except URLError as e:
             print(f"[quota] UPSTREAM ERROR {instance}: {e}", flush=True)
             self._json(502, {"type": "error", "error": "upstream_unavailable",
