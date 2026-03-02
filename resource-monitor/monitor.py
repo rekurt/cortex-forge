@@ -36,7 +36,11 @@ _admin_hash         = hashlib.sha256(MONITOR_ADMIN_TOKEN.encode()).hexdigest() i
 QUOTA_ADMIN_TOKEN = os.environ.get("QUOTA_ADMIN_TOKEN", "")
 QUOTA_PROXY_URL   = os.environ.get("QUOTA_PROXY_URL", "http://quota-proxy:9090")
 BROKER_URL        = os.environ.get("BROKER_URL", "http://message-broker:8080")
-BROKER_KEY_MONITOR = os.environ.get("BROKER_KEY_MONITOR", os.environ.get("MONITOR_ADMIN_TOKEN", ""))
+BROKER_KEY_MONITOR = os.environ.get("BROKER_KEY_MONITOR", "")
+if not BROKER_KEY_MONITOR:
+    # Не используем MONITOR_ADMIN_TOKEN как fallback — broker его не распознает.
+    # Алерты в broker будут отключены до задания BROKER_KEY_MONITOR в .env.
+    print("[monitor] WARNING: BROKER_KEY_MONITOR not set — broker alerts disabled", file=sys.stderr)
 
 ALERT_CPU_PCT   = float(os.environ.get("ALERT_CPU_PCT", "80"))
 ALERT_RAM_PCT   = float(os.environ.get("ALERT_RAM_PCT", "85"))
@@ -267,6 +271,8 @@ def send_alert(key: str, message: str):
         _active_alerts[key] = {"fired_at": now, "message": message, "key": key}
 
     log.warning(f"ALERT [{key}]: {message}")
+    if not BROKER_KEY_MONITOR:
+        return  # broker alerts disabled — no key configured
     try:
         body = json.dumps({
             "to":      "admin",

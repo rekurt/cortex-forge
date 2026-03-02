@@ -35,6 +35,7 @@ SKILL_TIMEOUT        = int(os.environ.get("SKILL_TIMEOUT", "120"))
 MAX_CONCURRENT_TASKS = int(os.environ.get("MAX_CONCURRENT_TASKS", "5"))
 USAGE_DB             = os.environ.get("USAGE_DB", "/data/usage.db")
 
+MAX_BODY_BYTES       = 1 * 1024 * 1024  # 1 MB — защита от oversized requests
 SKILLS_DIR = Path(os.environ.get("SKILLS_DIR", "/app/skills"))
 
 logging.basicConfig(
@@ -383,8 +384,10 @@ def send_json(handler, data: dict, status: int = 200):
     handler.wfile.write(body)
 
 
-def read_body(handler) -> bytes:
+def read_body(handler) -> bytes | None:
     length = int(handler.headers.get("Content-Length", "0"))
+    if length > MAX_BODY_BYTES:
+        return None
     return handler.rfile.read(length) if length else b""
 
 
@@ -432,6 +435,9 @@ class ServiceHandler(BaseHTTPRequestHandler):
 
         if path == "/v1/run":
             raw = read_body(self)
+            if raw is None:
+                send_json(self, {"status": "error", "error": "Request body too large"}, 413)
+                return
             try:
                 body = json.loads(raw)
             except json.JSONDecodeError as e:
