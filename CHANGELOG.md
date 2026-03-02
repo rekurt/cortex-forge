@@ -5,6 +5,13 @@ All notable changes to CortexForge will be documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org/).
 Releases are automated via [release-please](https://github.com/googleapis/release-please).
 
+## [0.3.0](https://github.com/rekurt/cortex-forge/compare/v0.2.0...v0.3.0) (2026-03-02)
+
+
+### Features
+
+* **infra:** reliability improvements and new skills from bugfix-reliability ([e7eb834](https://github.com/rekurt/cortex-forge/commit/e7eb834cf91ce85df6bdaa95b4122a2430be8c36))
+
 ## [0.2.0](https://github.com/rekurt/cortex-forge/compare/v0.1.4...v0.2.0) (2026-03-01)
 
 
