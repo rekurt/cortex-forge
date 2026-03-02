@@ -109,11 +109,8 @@ def _db_clear(recipient: str) -> int:
     """Delete all messages for a recipient. Returns count deleted."""
     conn = _get_conn()
     try:
-        cursor = conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE recipient = ?", (recipient,)
-        )
-        count = cursor.fetchone()[0]
         conn.execute("DELETE FROM messages WHERE recipient = ?", (recipient,))
+        count = conn.execute("SELECT changes()").fetchone()[0]
         conn.commit()
         return count
     finally:

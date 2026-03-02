@@ -128,13 +128,8 @@ class TestAdminSoulNotModified(unittest.TestCase):
     def test_admin_soul_differs_from_template(self):
         """Admin SOUL.md must NOT have the template's workaround section."""
         admin_soul = _read_file("instances/admin/workspace/SOUL.md")
-        template_soul = _read_file(
-            "instances/_template/workspace/SOUL.md"
-        )
-        # Admin should not have the new workaround section
-        # (unless admin was independently updated, which this task forbids)
-        self.assertNotEqual(admin_soul, template_soul,
-                            "Admin SOUL.md must differ from template")
+        self.assertNotIn("Workaround", admin_soul,
+                          "Admin SOUL.md must NOT contain the template's Workaround section")
 
 
 if __name__ == "__main__":

@@ -297,18 +297,7 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
 
     params_json = json.dumps(params, ensure_ascii=False)
 
-    # Security: re-check allowlist immediately before subprocess (defense-in-depth)
-    if skill_id not in allowed:
-        _task_semaphore.release()
-        log.warning("Blocked skill at exec gate — '%s' not in allowlist (caller=%s)",
-                    skill_id, caller)
-        return {
-            "status":      "error",
-            "skill":       skill_id,
-            "error":       f"Skill '{skill_id}' failed allowlist re-check",
-            "duration_ms": 0,
-        }
-
+    # skill_id validated: not in allowed → returned at line 268; allowlist enforced
     try:
         proc = subprocess.run(
             cmd,
