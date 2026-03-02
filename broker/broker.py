@@ -62,6 +62,7 @@ def _init_db():
 def _get_conn():
     """Get a SQLite connection (WAL mode set once in _init_db)."""
     conn = sqlite3.connect(BROKER_DB)
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
