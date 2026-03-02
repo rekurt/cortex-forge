@@ -1,0 +1,17 @@
+# CLIProxyAPI configuration
+# OAuth-прокси для Claude Max — позволяет использовать подписку вместо API-ключа.
+# Документация: https://github.com/nicekid1/CLIProxyAPI
+
+host: "0.0.0.0"
+port: 8317
+
+# API-ключ для авторизации запросов от quota-proxy.
+# Берётся из env-переменной CLIPROXY_API_KEY (подставляется Docker Compose).
+api-keys:
+  - "${CLIPROXY_API_KEY}"
+
+# Логирование в файл (в volume cliproxyapi-logs)
+logging-to-file: true
+
+# commercial-mode снижает потребление RAM за счёт отключения лишнего кэширования
+commercial-mode: true

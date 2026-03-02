@@ -1,6 +1,36 @@
 services:
 
   # ════════════════════════════════════════════════════
+  # CLIProxyAPI — OAuth-прокси для Claude Max
+  # Позволяет использовать подписку Claude Max вместо API-ключа.
+  # quota-proxy форвардит запросы сюда вместо api.anthropic.com.
+  # ════════════════════════════════════════════════════
+  cliproxyapi:
+    image: eceasy/cli-proxy-api:latest
+    container_name: corp-cliproxyapi
+    restart: unless-stopped
+    volumes:
+      - ./cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml:ro
+      - cliproxyapi-auths:/root/.cli-proxy-api
+      - cliproxyapi-logs:/CLIProxyAPI/logs
+    environment:
+      - CLIPROXY_API_KEY=${CLIPROXY_API_KEY}
+    networks:
+      - corp-egress
+      - corp-internal
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8317/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ════════════════════════════════════════════════════
   # CortexForge Proxy — единственное место с реальным API-ключом
   # Hardened: нет проброса портов наружу, resource limits
   # ════════════════════════════════════════════════════
@@ -356,6 +386,10 @@ volumes:
   monitor-data:
     driver: local
   service-data:
+    driver: local
+  cliproxyapi-auths:
+    driver: local
+  cliproxyapi-logs:
     driver: local
 
 networks:
