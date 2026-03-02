@@ -22,12 +22,18 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 
 # ── Конфиг ─────────────────────────────────────────────────────────────────
-UPSTREAM         = "https://api.anthropic.com"
+UPSTREAM_URL     = os.environ.get("UPSTREAM_URL", "https://api.anthropic.com").rstrip("/")
+UPSTREAM_API_KEY = os.environ.get("UPSTREAM_API_KEY", "")
 REAL_API_KEY     = os.environ.get("ANTHROPIC_API_KEY", "")
 ADMIN_TOKEN      = os.environ.get("QUOTA_ADMIN_TOKEN", "")
 
-if not REAL_API_KEY:
-    raise RuntimeError("ANTHROPIC_API_KEY не задан — proxy не может работать без реального ключа")
+# Ключ для upstream: UPSTREAM_API_KEY приоритетнее, fallback на ANTHROPIC_API_KEY
+_upstream_key    = UPSTREAM_API_KEY or REAL_API_KEY
+# Определяем режим работы: CLIProxyAPI или прямой Anthropic
+_is_cliproxy     = "api.anthropic.com" not in UPSTREAM_URL
+
+if not _upstream_key:
+    raise RuntimeError("Ни UPSTREAM_API_KEY, ни ANTHROPIC_API_KEY не заданы — proxy не может работать без ключа")
 DB_PATH          = os.environ.get("QUOTA_DB", "/data/quota.db")
 PORT             = int(os.environ.get("QUOTA_PORT", 9090))
 DEFAULT_MONTHLY  = int(os.environ.get("QUOTA_DEFAULT_MONTHLY", 1_000_000))
@@ -407,22 +413,32 @@ class Handler(BaseHTTPRequestHandler):
             self._json(413, {"error": "Request body too large (max 1MB)"}); return
 
         headers = {
-            **({"Authorization": f"Bearer {REAL_API_KEY}"} if REAL_API_KEY.startswith("sk-ant-oat") else {"x-api-key": REAL_API_KEY}),
             "anthropic-version": self.headers.get("anthropic-version", "2023-06-01"),
             "content-type":      self.headers.get("content-type", "application/json"),
         }
-        # При OAuth-ключе добавляем обязательные беты (oauth-2025-04-20, claude-code-20250219)
-        if REAL_API_KEY.startswith("sk-ant-oat"):
+
+        if _is_cliproxy:
+            # CLIProxyAPI: всегда x-api-key, без OAuth-бет, с User-Agent для обхода cloaking
+            headers["x-api-key"] = _upstream_key
+            headers["User-Agent"] = "claude-cli/2.1.44 (external, sdk-cli)"
+            if v := self.headers.get("anthropic-beta"):
+                headers["anthropic-beta"] = v
+        elif _upstream_key.startswith("sk-ant-oat"):
+            # Прямой Anthropic с OAuth-ключом
+            headers["Authorization"] = f"Bearer {_upstream_key}"
             oauth_betas = ["claude-code-20250219", "oauth-2025-04-20"]
             existing = self.headers.get("anthropic-beta", "")
             existing_list = [b.strip() for b in existing.split(",") if b.strip()]
-            all_betas = list(dict.fromkeys(oauth_betas + existing_list))  # deduplicate, oauth first
+            all_betas = list(dict.fromkeys(oauth_betas + existing_list))
             headers["anthropic-beta"] = ",".join(all_betas)
-        elif v := self.headers.get("anthropic-beta"):
-            headers["anthropic-beta"] = v
+        else:
+            # Прямой Anthropic с обычным API-ключом
+            headers["x-api-key"] = _upstream_key
+            if v := self.headers.get("anthropic-beta"):
+                headers["anthropic-beta"] = v
 
         try:
-            req = Request(UPSTREAM + self.path, data=body_raw or None,
+            req = Request(UPSTREAM_URL + self.path, data=body_raw or None,
                           headers=headers, method=method)
             with urlopen(req, timeout=120) as r:
                 resp_body, resp_status = r.read(), r.status
@@ -465,7 +481,9 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     instances = sorted(set(_quota_keys.values()))
+    upstream_mode = "CLIProxyAPI" if _is_cliproxy else "Anthropic API (direct)"
     print(f"✅ Quota-proxy hardened :{PORT}", flush=True)
+    print(f"   Upstream: {UPSTREAM_URL} ({upstream_mode})", flush=True)
     print(f"   Инстансы: {instances}", flush=True)
     print(f"   DB: {DB_PATH} (WAL mode)", flush=True)
     print(f"   Max body: {MAX_BODY_BYTES//1024}KB", flush=True)

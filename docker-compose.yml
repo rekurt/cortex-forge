@@ -42,6 +42,8 @@ services:
     environment:
       - QUOTA_DB=/data/quota.db
       - QUOTA_PORT=9090
+      - UPSTREAM_URL=http://cliproxyapi:8317
+      - UPSTREAM_API_KEY=${CLIPROXY_API_KEY}
     volumes:
       - quota-data:/data
     ports:
@@ -67,6 +69,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    depends_on:
+      cliproxyapi:
+        condition: service_healthy
 
   # ════════════════════════════════════════════════════
   # MESSAGE BROKER — шина сообщений (только corp-internal)
