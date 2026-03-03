@@ -12,6 +12,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Docker 24+, Docker Compose 2.x, Python 3.12+, ShellCheck.
 
+### Initial setup (CLIProxyAPI OAuth)
+
+CLIProxyAPI хранит OAuth-сессию Claude Max в Docker volume `cortex-forge_cliproxyapi-auths` (mount: `/root/.cli-proxy-api`). При первом деплое или если volume потерян, контейнер падает в restart loop (лог: только `CLIProxyAPI Version: ...`, exit code 0, без ошибок).
+
+Процедура OAuth-логина (headless-сервер):
+
+```bash
+# 1. На локальной машине: SSH-туннель для OAuth callback
+ssh -L 54545:127.0.0.1:54545 <user>@<server-ip>
+
+# 2. На сервере: логин БЕЗ --rm (credentials сохраняются в рабочую директорию контейнера)
+docker run -it --name cliproxy-login \
+  -p 54545:54545 \
+  -v /opt/capuchin/cortex-forge/cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml:ro \
+  eceasy/cli-proxy-api:latest \
+  ./CLIProxyAPI -claude-login -no-browser -oauth-callback-port 54545
+
+# 3. Открыть URL из вывода в браузере, авторизоваться
+
+# 4. Скопировать credential-файл из контейнера в persistent volume
+docker cp cliproxy-login:/CLIProxyAPI/. /tmp/cliproxy-auths/
+docker run --rm \
+  -v cortex-forge_cliproxyapi-auths:/data \
+  -v /tmp/cliproxy-auths/:/src:ro \
+  alpine sh -c 'cp /src/claude-*.json /data/'
+
+# 5. Очистить
+docker rm cliproxy-login
+rm -rf /tmp/cliproxy-auths/
+
+# 6. Запустить стек
+make deploy
+```
+
+**Почему так сложно:** CLIProxyAPI сохраняет `claude-*.json` в свою рабочую директорию (`/CLIProxyAPI/`), а не в `auth-dir`. Поэтому при логине нельзя использовать `--rm` — файл потеряется. `entrypoint.sh` при старте симлинкит credential-файлы из volume в рабочую директорию. `config.yaml` содержит `auth-dir: "/root/.cli-proxy-api"` для чтения credentials оттуда.
+
+**Токен авто-обновляется:** CLIProxyAPI сам рефрешит OAuth-токен каждые 15 минут (см. `core auth auto-refresh started` в логах).
+
 ### Development
 
 ```bash
@@ -96,6 +134,10 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 
 ## Architecture
 
+### Compose file structure
+
+Базовый `docker-compose.yml` определяет только инфраструктуру + admin. Все пользовательские инстансы живут в **`docker-compose.override.yml`** (gitignored). `add-user.sh` автоматически дописывает туда новый сервис. Для обнаружения всех compose-файлов скрипты используют `docker compose config`.
+
 ### Core components
 
 | Компонент | Путь | Назначение |
@@ -107,6 +149,24 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 | `service-agent` | `service-agent/server.py` | HTTP API для вызова скиллов (stdin→stdout JSON); лимит 5 параллельных задач, таймаут 120s |
 | `instances/admin` | `instances/admin/` | Инстанс Prior — инфраструктурный контроль, прямой `ANTHROPIC_API_KEY` |
 | `instances/_template` | `instances/_template/` | Шаблон для новых инстансов |
+
+### Naming conventions
+
+- **Container names:** `corp-<name>` (e.g. `corp-admin`, `corp-quota`, `corp-broker`, `corp-rekurt`)
+- **Compose service names:** `assistant-<name>` для пользовательских инстансов; `quota-proxy`, `message-broker`, `resource-monitor`, `assistant-service` для инфраструктуры
+- `make logs NAME=admin` использует Compose service name (`assistant-admin`), не container name (`corp-admin`)
+
+### Quota key flow (critical)
+
+Инстансы **никогда** не видят настоящий API-ключ. Цепочка:
+1. `add-user.sh` генерирует `QUOTA_KEY_<NAME>=quota-<name>-<random>` в корневом `.env`
+2. В `docker-compose.override.yml` инстанс получает `ANTHROPIC_API_KEY=${QUOTA_KEY_<NAME>}` — OpenClaw думает, что это обычный API-ключ
+3. `openclaw.json.template` указывает `baseUrl: "http://quota-proxy:9090"` — все запросы идут через прокси
+4. `quota-proxy` хэширует полученный ключ (SHA256), ищет в `_quota_keys`, подставляет настоящий upstream-ключ
+
+### User instance image
+
+Пользовательские инстансы собираются из `instances/Dockerfile.user` (не напрямую из `ghcr.io/openclaw/openclaw:latest`). Поверх базового образа добавлены: `ffmpeg` (транскрибация аудио), `tesseract-ocr` (русский + английский), `mcporter` (MCP CLI). Admin использует базовый образ напрямую.
 
 ### Service-agent skills
 
@@ -152,7 +212,8 @@ Rate limits: 300 req/min на инстанс, 60 req/min на admin-эндпои
 
 ### Instance workspace structure
 
-Каждый инстанс — OpenClaw-контейнер с workspace:
+Воркспейсы живут **вне репозитория**: `../<name>-workspace/` (legacy fallback: `instances/<name>/openclaw_data/workspace/`). `migrate-instances.py` обнаруживает их через `REPO_ROOT.parent`. Admin workspace: `../admin-workspace/`.
+
 ```
 instances/<name>/workspace/
   SOUL.md           # персонаж и стиль общения
@@ -227,8 +288,23 @@ openclaw.json       # конфиг: Telegram-канал + модель
 Переменные инстанса в `instances/<name>/.env`:
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOW_FROM`
 - `BROKER_KEY` — берётся из корневого `.env`
+- `GATEWAY_TOKEN` — auth-токен OpenClaw web UI (генерируется `add-user.sh`)
 
 Пороги алертов resource-monitor (env vars): `ALERT_CPU_PCT` (80%), `ALERT_RAM_PCT` (85%), `ALERT_DISK_PCT` (90%), `ALERT_QUOTA_PCT` (80%), `MONITOR_INTERVAL` (60s).
+
+`DOCKER_GID` — GID группы `docker` на хосте (default `999`). Нужен `resource-monitor` для доступа к Docker socket через `group_add`.
+
+### Port map
+
+| Port | Service | Binding |
+|------|---------|---------|
+| 8080 | message-broker | internal only |
+| 8090 | service-agent | `127.0.0.1:8090` |
+| 8317 | cliproxyapi | internal only |
+| 9090 | quota-proxy | `127.0.0.1:9090` |
+| 9091 | resource-monitor | `127.0.0.1:9091` |
+| 18789 | admin OpenClaw UI | `127.0.0.1:18789` |
+| 18790+N | user instance UIs | `127.0.0.1:18790+N` |
 
 ### Key operational scripts
 
@@ -247,3 +323,11 @@ openclaw.json       # конфиг: Telegram-канал + модель
 - **Skills env isolation**: service-agent передаёт subprocess только переменные из `env_vars` в `skills.json` — остальные env не попадают в скилл
 - **SQLite WAL**: все компоненты используют WAL mode + `journal_size_limit=1048576` (1MB); данные переживают рестарт контейнера
 - **Broker sender auth**: отправитель определяется по API-ключу, не по полю body — подменить sender невозможно
+- **Streaming не трекается квотой**: `quota-proxy` считает токены только из non-streaming ответов (`{"usage": {...}}`). SSE-стримы (`text/event-stream`) пропускаются — использование не учитывается
+- **Broker per-operation connections**: `broker.py` открывает/закрывает SQLite-соединение на каждую операцию (для WAL mode). `quota-proxy` наоборот — держит один `_conn` на всё время жизни
+- **Node.js heap**: admin = `--max-old-space-size=1536` (1.5 GB), user instances = `768` (768 MB)
+- **Test import order**: env-переменные **ОБЯЗАТЕЛЬНО** ставить до `import` тестируемого модуля — модули читают env при импорте, не при вызове
+- **docker-compose.override.yml**: gitignored, содержит все пользовательские инстансы. `add-user.sh` дописывает туда. Базовый `docker-compose.yml` — только инфраструктура + admin
+- **GATEWAY_TOKEN**: генерируется `add-user.sh` для каждого инстанса, используется как auth-токен OpenClaw web UI
+- **Migration overrides**: `../overrides/migrations/` — внешние миграции с приоритетом над `migrations/` (совпадение по имени файла)
+- **ai_security_check.py exit codes**: CRITICAL/HIGH = exit 1 (блокирует CI), MEDIUM/LOW = warnings (не блокируют)
