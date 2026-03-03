@@ -357,7 +357,7 @@ CortexForge/
 │   ├── proxy.py          # HTTP proxy + SQLite quota & audit log
 │   └── Dockerfile
 ├── broker/               # message bus between assistants
-│   └── broker.py         # in-memory inbox per instance, auth by key
+│   └── broker.py         # SQLite-persistent inbox per instance, auth by key
 ├── resource-monitor/     # CPU/RAM/disk monitoring
 │   ├── monitor.py        # metrics collection, alert cooldown, HTTP API
 │   └── Dockerfile

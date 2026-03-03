@@ -57,7 +57,7 @@
 **Сеть:**
 - `corp-internal` — у всех, для брокера
 - `corp-admin` — только Admin + quota-proxy
-- `corp-egress` — только quota-proxy (форвардинг в api.anthropic.com)
+- `corp-egress` — quota-proxy + cliproxyapi (CLIProxyAPI OAuth к Anthropic, quota-proxy форвардит через CLIProxyAPI)
 
 ---
 
