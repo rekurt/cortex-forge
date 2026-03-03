@@ -48,6 +48,9 @@ services:
     env_file: .env
     environment:
       - BROKER_PORT=8080
+      - BROKER_DB=/data/broker.db
+    volumes:
+      - broker-data:/data
     networks:
       - corp-internal
     security_opt:
@@ -81,6 +84,8 @@ services:
       - ./shared/skills:/shared/skills
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data
+      - ./instances/admin/workspace:/home/node/.openclaw/workspace
+      - ./instances/admin/openclaw.json:/home/node/.openclaw/openclaw.json
       # Монтируем только то, что нужно для управления — НЕ .env с ключами
       - ./instances:/infra/instances         # воркспейсы инстансов
       - ./scripts:/infra/scripts:ro          # скрипты управления (read-only)
@@ -172,6 +177,8 @@ services:
       - corp-admin
     security_opt:
       - no-new-privileges:true
+    group_add:
+      - "${DOCKER_GID:-999}"   # docker group GID — нужен для доступа к /var/run/docker.sock под non-root
     deploy:
       resources:
         limits:
@@ -206,9 +213,17 @@ services:
       - MAX_CONCURRENT_TASKS=5
       - DADATA_API_KEY=${DADATA_API_KEY:-}
       - DADATA_SECRET=${DADATA_SECRET:-}
+      - BROKER_URL=http://message-broker:8080
+      - BROKER_KEY=${BROKER_KEY_SERVICE}
+      - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+      - QUOTA_PROXY_URL=http://quota-proxy:9090
+      - MONITOR_URL=http://resource-monitor:9091
+      - MONITOR_ADMIN_TOKEN=${MONITOR_ADMIN_TOKEN:-}
     volumes:
       - service-data:/data
       - ./service-agent/skills:/app/skills:ro
+      - ./shared/skills:/shared/skills:ro
+      - ./shared/docs:/shared/docs:ro
     ports:
       - "127.0.0.1:8090:8090"   # только localhost — nginx/reverse-proxy закроет снаружи
     networks:
@@ -246,9 +261,13 @@ services:
       - BROKER_KEY=${BROKER_KEY_USER_1}
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
     depends_on:
       quota-proxy:
         condition: service_healthy
@@ -277,7 +296,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -312,7 +331,7 @@ services:
       - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
-      - corp-egress
+      - corp-outbound
     security_opt:
       - no-new-privileges:true
     deploy:
@@ -330,6 +349,8 @@ services:
 
 volumes:
   quota-data:
+    driver: local
+  broker-data:
     driver: local
   monitor-data:
     driver: local

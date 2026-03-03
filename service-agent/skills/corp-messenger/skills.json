@@ -1,0 +1,25 @@
+{
+  "id": "corp-messenger",
+  "name": "Corp Messenger",
+  "description": "Межинстансный мессенджер CortexForge",
+  "params": {
+    "action": {
+      "type": "string",
+      "enum": ["send", "inbox", "clear", "list"],
+      "required": true,
+      "description": "Действие: send — отправить, inbox — прочитать входящие, clear — очистить inbox, list — список инстансов"
+    },
+    "to": {
+      "type": "string",
+      "required": false,
+      "description": "Имя получателя (только для action=send)"
+    },
+    "message": {
+      "type": "string",
+      "required": false,
+      "description": "Текст сообщения (только для action=send)"
+    }
+  },
+  "timeout": 30,
+  "env_vars": ["BROKER_URL", "BROKER_KEY"]
+}

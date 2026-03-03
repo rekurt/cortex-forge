@@ -8,19 +8,19 @@ Hardening:
   - Max message size: 10KB
   - Security headers
   - Message size limit in inbox
+  - SQLite persistence (WAL mode) — messages survive restarts
 """
 
-import json, os, signal, time, hashlib, hmac, threading
+import json, os, signal, time, hashlib, hmac, threading, sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from collections import defaultdict, deque
 from urllib.parse import urlparse
 
 MAX_MSG_BYTES = 10 * 1024   # 10KB на сообщение
 MAX_INBOX     = 100
 MAX_AGE_SEC   = 86400
 
-_lock   = threading.Lock()
-_inbox  = defaultdict(deque)
+BROKER_DB = os.environ.get("BROKER_DB", "/data/broker.db")
+
 _keys: dict[str, str] = {}   # {sha256(key): instance_name}
 
 def _load_keys():
@@ -32,6 +32,116 @@ def _load_keys():
     return keys
 
 _keys = _load_keys()
+
+
+# ── SQLite storage ─────────────────────────────────────────────────────────
+
+def _init_db():
+    """Initialize SQLite database with WAL mode."""
+    os.makedirs(os.path.dirname(BROKER_DB) or ".", exist_ok=True)
+    conn = sqlite3.connect(BROKER_DB)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA journal_size_limit=1048576")  # 1MB
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender    TEXT    NOT NULL,
+            recipient TEXT    NOT NULL,
+            body      TEXT    NOT NULL,
+            ts        REAL    NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_messages_recipient_ts
+        ON messages (recipient, ts)
+    """)
+    conn.commit()
+    conn.close()
+
+
+def _get_conn():
+    """Get a SQLite connection (WAL mode set once in _init_db)."""
+    conn = sqlite3.connect(BROKER_DB)
+    return conn
+
+
+def _db_insert(sender: str, recipient: str, body: str, ts: float):
+    """Insert a message and enforce MAX_INBOX per recipient."""
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO messages (sender, recipient, body, ts) VALUES (?, ?, ?, ?)",
+            (sender, recipient, body, ts),
+        )
+        # Enforce MAX_INBOX: delete oldest messages beyond limit
+        conn.execute("""
+            DELETE FROM messages WHERE id IN (
+                SELECT id FROM messages
+                WHERE recipient = ?
+                ORDER BY ts DESC
+                LIMIT -1 OFFSET ?
+            )
+        """, (recipient, MAX_INBOX))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _db_inbox(recipient: str) -> list[dict]:
+    """Get inbox messages for a recipient (up to MAX_INBOX, excluding expired)."""
+    cutoff = time.time() - MAX_AGE_SEC
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT sender, recipient, body, ts FROM messages "
+            "WHERE recipient = ? AND ts > ? ORDER BY ts LIMIT ?",
+            (recipient, cutoff, MAX_INBOX),
+        ).fetchall()
+        return [
+            {"from": r[0], "to": r[1], "message": r[2], "ts": r[3]}
+            for r in rows
+        ]
+    finally:
+        conn.close()
+
+
+def _db_clear(recipient: str) -> int:
+    """Delete all messages for a recipient. Returns count deleted."""
+    conn = _get_conn()
+    try:
+        cursor = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE recipient = ?", (recipient,)
+        )
+        count = cursor.fetchone()[0]
+        conn.execute("DELETE FROM messages WHERE recipient = ?", (recipient,))
+        conn.commit()
+        return count
+    finally:
+        conn.close()
+
+
+def _db_counts() -> dict[str, int]:
+    """Get message count per recipient."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT recipient, COUNT(*) FROM messages GROUP BY recipient"
+        ).fetchall()
+        return {r[0]: r[1] for r in rows}
+    finally:
+        conn.close()
+
+
+def _cleanup():
+    """Delete expired messages."""
+    cutoff = time.time() - MAX_AGE_SEC
+    conn = _get_conn()
+    try:
+        conn.execute("DELETE FROM messages WHERE ts < ?", (cutoff,))
+        conn.commit()
+    finally:
+        conn.close()
+
 
 # ── Rate limiter ────────────────────────────────────────────────────────────
 class RateLimiter:
@@ -62,13 +172,6 @@ def _auth(req) -> str | None:
             result = name
     return result
 
-def _cleanup():
-    cutoff = time.time() - MAX_AGE_SEC
-    with _lock:
-        for q in _inbox.values():
-            while q and q[0]["ts"] < cutoff:
-                q.popleft()
-
 _SEC_HEADERS = {"X-Content-Type-Options": "nosniff", "Cache-Control": "no-store"}
 
 class Handler(BaseHTTPRequestHandler):
@@ -89,7 +192,12 @@ class Handler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
 
         if path == "/health":
-            self._json(200, {"status": "ok", "instances": sorted(set(_keys.values()))})
+            counts = _db_counts()
+            self._json(200, {
+                "status": "ok",
+                "instances": sorted(set(_keys.values())),
+                "message_counts": counts,
+            })
             return
 
         if path == "/inbox":
@@ -97,8 +205,7 @@ class Handler(BaseHTTPRequestHandler):
             if not sender:
                 self._json(403, {"error": "Unauthorized"}); return
             _cleanup()
-            with _lock:
-                msgs = list(_inbox[sender])
+            msgs = _db_inbox(sender)
             self._json(200, {"inbox": msgs, "count": len(msgs)})
             return
 
@@ -136,11 +243,8 @@ class Handler(BaseHTTPRequestHandler):
         if to == sender:
             self._json(400, {"error": "Cannot send to yourself"}); return
 
-        msg = {"from": sender, "to": to, "message": message[:MAX_MSG_BYTES], "ts": time.time()}
-        with _lock:
-            q = _inbox[to]
-            if len(q) >= MAX_INBOX: q.popleft()
-            q.append(msg)
+        _cleanup()
+        _db_insert(sender, to, message[:MAX_MSG_BYTES], time.time())
 
         print(f"[broker] {sender} → {to}: {message[:60]}", flush=True)
         self._json(200, {"ok": True, "from": sender, "to": to})
@@ -153,9 +257,7 @@ class Handler(BaseHTTPRequestHandler):
         if not sender:
             self._json(403, {"error": "Unauthorized"}); return
 
-        with _lock:
-            count = len(_inbox[sender])
-            _inbox[sender].clear()
+        count = _db_clear(sender)
 
         print(f"[broker] {sender} очистил inbox ({count} сообщений)", flush=True)
         self._json(200, {"ok": True, "deleted": count})
@@ -163,6 +265,10 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("BROKER_PORT", 8080))
+
+    _init_db()
+    print(f"[broker] SQLite DB: {BROKER_DB}", flush=True)
+
     if not _keys:
         print("⚠️  Нет API-ключей!", flush=True)
     else:
