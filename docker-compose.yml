@@ -27,7 +27,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8317/v1/models"]
+      test: ["CMD-SHELL", "wget --spider -q --header='x-api-key: '\"$CLIPROXY_API_KEY\" http://localhost:8317/v1/models"]
       interval: 30s
       timeout: 10s
       retries: 5

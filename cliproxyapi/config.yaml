@@ -5,6 +5,10 @@
 host: "0.0.0.0"
 port: 8317
 
+# Директория с OAuth-credentials (claude-*.json).
+# Volume cliproxyapi-auths монтируется сюда в docker-compose.
+auth-dir: "/root/.cli-proxy-api"
+
 # API-ключ для авторизации запросов от quota-proxy.
 # Берётся из env-переменной CLIPROXY_API_KEY (подставляется Docker Compose).
 api-keys:

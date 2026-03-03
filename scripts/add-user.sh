@@ -117,9 +117,12 @@ text = text.replace('{{BOT_TOKEN}}', bot_token).replace('{{TG_ID}}', tg_id)
 p.write_text(text)
 " "$BOT_TOKEN" "$TG_ID" "$TARGET/openclaw_data/openclaw.json"
 
-# Выставляем владельца — OpenClaw работает от uid 1000 (node)
-chown -R 1000:1000 "$TARGET/openclaw_data" 2>/dev/null || true
-chown -R 1000:1000 "$REPO_WORKSPACE" 2>/dev/null || true
+# Выставляем владельца — OpenClaw работает от uid 1000 (node).
+# Используем docker alpine для chown, т.к. deploy user может не иметь прав на chown.
+docker run --rm \
+    -v "$(pwd)/$TARGET/openclaw_data:/data1" \
+    -v "$(cd .. && pwd)/${NAME}-workspace:/data2" \
+    alpine chown -R 1000:1000 /data1 /data2
 
 # Добавляем ключи в глобальный .env
 if [ -f ".env" ]; then
@@ -153,6 +156,7 @@ service = f"""
       - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
+      - OPENAI_API_KEY=${{OPENAI_API_KEY}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
       - NODE_OPTIONS=--max-old-space-size=768

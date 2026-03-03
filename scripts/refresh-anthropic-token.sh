@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENV_FILE="/opt/cortex-forge/.env"
-LOG_FILE="/opt/cortex-forge/logs/token-refresh.log"
+ENV_FILE="/opt/capuchin/cortex-forge/.env"
+LOG_FILE="/opt/capuchin/cortex-forge/logs/token-refresh.log"
 mkdir -p "$(dirname "$LOG_FILE")"
 
 log() { echo "[$(date -u '+%Y-%m-%d %H:%M:%S UTC')] $*" | tee -a "$LOG_FILE"; }
@@ -40,5 +40,5 @@ echo "ANTHROPIC_TOKEN_EXPIRES_AT=${EXPIRES_AT}" >> "$TMP_ENV"
 mv "$TMP_ENV" "$ENV_FILE"
 
 log "Обновлён .env. Перезапускаем quota-proxy..."
-cd /opt/cortex-forge && docker compose restart quota-proxy >> "$LOG_FILE" 2>&1
+cd /opt/capuchin/cortex-forge && docker compose restart quota-proxy >> "$LOG_FILE" 2>&1
 log "Готово."
