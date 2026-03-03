@@ -5,6 +5,30 @@ All notable changes to CortexForge will be documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org/).
 Releases are automated via [release-please](https://github.com/googleapis/release-please).
 
+## [0.4.0](https://github.com/example-org/cortex-forge/compare/v0.3.0...v0.4.0) (2026-03-03)
+
+
+### Features
+
+* add CLIProxyAPI as Docker service for Claude Max OAuth ([a63da83](https://github.com/example-org/cortex-forge/commit/a63da83e9c35a051c80afc18dfbc97cd5a2df7b1))
+* configurable upstream for quota-proxy (CLIProxyAPI support) ([debf04c](https://github.com/example-org/cortex-forge/commit/debf04c63d5f0c912e6efd6d0bf9aa703850d58b))
+* update monkey personality with warmth and workaround-thinking ([0e7e6ff](https://github.com/example-org/cortex-forge/commit/0e7e6ff0b25c7c75aea40a7dd6db869453d2e760))
+* verify acceptance criteria for CLIProxyAPI and personality updates ([c0fd05e](https://github.com/example-org/cortex-forge/commit/c0fd05e38e0fb22c582e1c2ffda9eff7817e0fb9))
+
+
+### Bug Fixes
+
+* address code review findings ([50b140b](https://github.com/example-org/cortex-forge/commit/50b140b7e1e42c6df8b6ecb69c363133d32e1522))
+* address code review findings ([99fa73d](https://github.com/example-org/cortex-forge/commit/99fa73d7d2b87069a43d289f64f56ce8ef1b9624))
+* address code review findings ([d711d51](https://github.com/example-org/cortex-forge/commit/d711d5172a332c06f980b709d768f0299cee5a4a))
+* address code review findings ([d3453dd](https://github.com/example-org/cortex-forge/commit/d3453ddf734c4775e8354339fe0e3cfaeae91cbc))
+* address code review findings ([869fc79](https://github.com/example-org/cortex-forge/commit/869fc79fcca16a25b8e52f960f67953e45ff99c8))
+* address code review findings ([fb3a3f2](https://github.com/example-org/cortex-forge/commit/fb3a3f2bc12a9881f5a8d8e17133ae59caa38689))
+* address code review findings ([3c31d3a](https://github.com/example-org/cortex-forge/commit/3c31d3ae8330644ba9a776f65487729fb4745604))
+* address code review findings ([9e8702e](https://github.com/example-org/cortex-forge/commit/9e8702eb7ed390b5d8c7ce23409e7b57f8358a21))
+* address code review findings ([28c49d7](https://github.com/example-org/cortex-forge/commit/28c49d7cdbf9122541244d3b26b674d9ae3d2a61))
+* use service names and auto-discover compose files in sync-instan… ([#11](https://github.com/example-org/cortex-forge/issues/11)) ([50b140b](https://github.com/example-org/cortex-forge/commit/50b140b7e1e42c6df8b6ecb69c363133d32e1522))
+
 ## [0.3.0](https://github.com/example-org/cortex-forge/compare/v0.2.0...v0.3.0) (2026-03-02)
 
 
