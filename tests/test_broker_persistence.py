@@ -148,6 +148,7 @@ class TestBrokerPersistence(unittest.TestCase):
         self.assertEqual(code, 200)
         self.assertTrue(body["ok"])
         self.assertGreaterEqual(body["deleted"], 1)
+        self.assertEqual(body["remaining"], 0)
 
         # Verify inbox is empty
         code, body = self._request("GET", "/inbox", key="alice-secret-key")
@@ -260,7 +261,7 @@ class TestBrokerPersistence(unittest.TestCase):
         """Non-admin instances cannot use ?for= to read other inboxes."""
         code, body = self._request("GET", "/inbox?for=bob", key="alice-secret-key")
         self.assertEqual(code, 403)
-        self.assertIn("Admin only", body["error"])
+        self.assertIn("Proxy access denied", body["error"])
 
     def test_admin_for_unknown_instance(self):
         """Admin gets 404 when using ?for= with unknown instance."""

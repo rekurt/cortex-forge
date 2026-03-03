@@ -98,7 +98,7 @@ class MockBrokerHandler(BaseHTTPRequestHandler):
         if self.path == "/inbox":
             if not self._check_auth():
                 return
-            self._json(200, {"ok": True, "deleted": 3})
+            self._json(200, {"ok": True, "deleted": 3, "remaining": 0})
             return
 
         self._json(404, {"error": "Not found"})
@@ -202,6 +202,8 @@ class TestCorpMessenger(unittest.TestCase):
         result = self._run_skill({"action": "clear"})
         self.assertEqual(result["status"], "ok")
         self.assertEqual(result["deleted"], 3)
+        self.assertEqual(result["remaining"], 0)
+        self.assertIn("inbox is now empty", result["message"])
 
     # ── error handling ────────────────────────────────────────────────────
 

@@ -53,4 +53,5 @@ instances/*/workspace/.git/
 instances/*/workspace/.gitignore
 instances/*/workspace/notes-vault/
 instances/*/workspace/BOOTSTRAP.md
+instances/*/workspace/node_modules
 *.lock

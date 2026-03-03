@@ -109,14 +109,17 @@ def _db_inbox(recipient: str) -> list[dict]:
         conn.close()
 
 
-def _db_clear(recipient: str) -> int:
-    """Delete all messages for a recipient. Returns count deleted."""
+def _db_clear(recipient: str) -> tuple[int, int]:
+    """Delete all messages for a recipient. Returns (deleted, remaining)."""
     conn = _get_conn()
     try:
         conn.execute("DELETE FROM messages WHERE recipient = ?", (recipient,))
         count = conn.execute("SELECT changes()").fetchone()[0]
         conn.commit()
-        return count
+        remaining = conn.execute(
+            "SELECT COUNT(*) FROM messages WHERE recipient = ?", (recipient,)
+        ).fetchone()[0]
+        return count, remaining
     finally:
         conn.close()
 
@@ -308,12 +311,12 @@ class Handler(BaseHTTPRequestHandler):
             if target not in known:
                 self._json(404, {"error": "Unknown instance"}); return
 
-        count = _db_clear(target)
+        count, remaining = _db_clear(target)
 
         print(f"[broker] {target} очистил inbox ({count} сообщений)"
               + (f" (via {sender})" if target != sender else ""),
               flush=True)
-        self._json(200, {"ok": True, "deleted": count})
+        self._json(200, {"ok": True, "deleted": count, "remaining": remaining})
 
 
 if __name__ == "__main__":

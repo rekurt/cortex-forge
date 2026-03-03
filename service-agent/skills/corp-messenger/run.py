@@ -110,7 +110,13 @@ def action_clear(params, caller):
 
     if code == 200:
         deleted = body.get("deleted", 0)
-        return {"status": "ok", "deleted": deleted, "message": f"Cleared {deleted} messages"}
+        remaining = body.get("remaining", 0)
+        msg = f"Cleared {deleted} messages"
+        if remaining:
+            msg += f", {remaining} still in inbox"
+        else:
+            msg += ", inbox is now empty"
+        return {"status": "ok", "deleted": deleted, "remaining": remaining, "message": msg}
     elif code == 403:
         return {"status": "error", "error": "Authentication failed — check BROKER_KEY"}
     else:

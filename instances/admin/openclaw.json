@@ -36,5 +36,16 @@
   "commands": {
     "native": "auto",
     "nativeSkills": "auto"
+  },
+  "skills": {
+    "allowBundled": ["mcporter"],
+    "entries": {
+      "mcporter": {
+        "enabled": true
+      }
+    }
+  },
+  "env": {
+    "PATH": "/home/node/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
   }
 }
