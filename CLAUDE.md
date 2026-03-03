@@ -237,7 +237,7 @@ openclaw.json       # конфиг: Telegram-канал + модель
 
 - Имя: **Admin**. Имеет прямой `ANTHROPIC_API_KEY` (не через quota-proxy)
 - Доступ к Docker socket (read-only) и весь проект через `/infra/` (rw)
-- Admin workspace вынесен из репозитория: `../admin-workspace/`
+- Admin workspace в репозитории: `instances/admin/workspace/`
 - Ежечасно запускает `scripts/sync-instances.sh`: миграции, healthcheck, рестарт упавших контейнеров
 
 ### Broker API

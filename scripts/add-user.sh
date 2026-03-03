@@ -53,19 +53,14 @@ echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
 mkdir -p "$TARGET/openclaw_data"
 
-# Создаём workspace вне репо (рядом с корнем проекта)
-REPO_WORKSPACE="../${NAME}-workspace"
-if [ ! -d "$REPO_WORKSPACE" ]; then
-    cp -r "$TEMPLATE/workspace/" "$REPO_WORKSPACE"
-    rm -rf "$REPO_WORKSPACE/memory" "$REPO_WORKSPACE/.openclaw"
-    cat > "$REPO_WORKSPACE/.gitignore" << 'GITEOF'
-notes-vault/
-memory/
-USER.md
-GITEOF
-    echo "  ✅ Workspace создан в ${NAME}-workspace/"
+# Создаём workspace внутри директории инстанса
+INSTANCE_WORKSPACE="$TARGET/workspace"
+if [ ! -d "$INSTANCE_WORKSPACE" ]; then
+    cp -r "$TEMPLATE/workspace/" "$INSTANCE_WORKSPACE"
+    rm -rf "$INSTANCE_WORKSPACE/memory" "$INSTANCE_WORKSPACE/.openclaw"
+    echo "  ✅ Workspace создан в instances/$NAME/workspace/"
 fi
-mkdir -p "$REPO_WORKSPACE/skills" "$REPO_WORKSPACE/memory"
+mkdir -p "$INSTANCE_WORKSPACE/skills" "$INSTANCE_WORKSPACE/memory"
 
 # Подставляем переменные в workspace (безопасно для спецсимволов в FULL_NAME)
 python3 -c "
@@ -77,7 +72,7 @@ for fname in ['USER.md', 'IDENTITY.md']:
         text = p.read_text()
         text = text.replace('{{FULL_NAME}}', full_name).replace('{{NAME}}', name)
         p.write_text(text)
-" "$NAME" "$FULL_NAME" "$REPO_WORKSPACE"
+" "$NAME" "$FULL_NAME" "$INSTANCE_WORKSPACE"
 
 # Генерируем ключи
 BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
@@ -121,7 +116,7 @@ p.write_text(text)
 # Используем docker alpine для chown, т.к. deploy user может не иметь прав на chown.
 docker run --rm \
     -v "$(pwd)/$TARGET/openclaw_data:/data1" \
-    -v "$(cd .. && pwd)/${NAME}-workspace:/data2" \
+    -v "$(pwd)/$TARGET/workspace:/data2" \
     alpine chown -R 1000:1000 /data1 /data2
 
 # Добавляем ключи в глобальный .env
@@ -150,7 +145,7 @@ service = f"""
       - instances/{name}/.env
     volumes:
       - ./instances/{name}/openclaw_data:/home/node/.openclaw
-      - ../{name}-workspace:/home/node/.openclaw/workspace
+      - ./instances/{name}/workspace:/home/node/.openclaw/workspace
       - ./shared/skills:/shared/skills
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data:ro
@@ -201,5 +196,5 @@ echo "   Control UI: http://localhost:$UI_PORT"
 echo ""
 echo "📋 Далее:"
 echo "  1. nano instances/$NAME/.env               — персональные токены"
-echo "  2. nano ../${NAME}-workspace/SOUL.md        — настроить персонажа"
+echo "  2. nano instances/$NAME/workspace/SOUL.md    — настроить персонажа"
 echo "  3. make deploy"

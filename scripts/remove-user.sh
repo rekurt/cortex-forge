@@ -29,9 +29,8 @@ docker compose rm -f "assistant-$NAME" 2>/dev/null || true
 
 # Архивируем воркспейс перед удалением
 ARCHIVE="backups/${NAME}-$(date +%Y%m%d).tar.gz"
-WORKSPACE="../${NAME}-workspace"
 mkdir -p backups
-if tar -czf "$ARCHIVE" "$WORKSPACE" "$TARGET" 2>/dev/null; then
+if tar -czf "$ARCHIVE" "$TARGET" 2>/dev/null; then
     echo "📦 Архив: $ARCHIVE"
 else
     echo "⚠️  Архив не создан (возможно, воркспейс отсутствует)"
@@ -39,12 +38,8 @@ else
     [ "$CONFIRM_DEL" = "yes" ] || { echo "Отмена."; exit 0; }
 fi
 
-# Удаляем директорию инстанса и внешний воркспейс
+# Удаляем директорию инстанса (включая workspace)
 rm -rf "$TARGET"
-if [ -d "$WORKSPACE" ]; then
-    rm -rf "$WORKSPACE"
-    echo "✅ Воркспейс '$WORKSPACE' удалён"
-fi
 echo "✅ Инстанс '$NAME' удалён"
 
 # Удаляем ключи из глобального .env
