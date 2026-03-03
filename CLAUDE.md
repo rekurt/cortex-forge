@@ -150,11 +150,17 @@ Rate limits: 300 req/min на инстанс, 60 req/min на admin-эндпои
 - Все контейнеры — non-root user `app`, `no-new-privileges: true`
 - Квоты и метрики хранятся в SQLite (WAL mode) — переживают рестарты без ребилда
 
+### Instance deployment
+
+Пользовательские инстансы генерируются `add-user.sh` в `docker-compose.override.yml` (gitignored). Основной `docker-compose.yml` содержит только core-сервисы и admin.
+
+Naming convention: сервис `assistant-<name>`, контейнер `corp-<name>` (пример: `assistant-alexey` / `corp-alexey`).
+
 ### Instance workspace structure
 
-Каждый инстанс — OpenClaw-контейнер с workspace:
+Каждый инстанс — OpenClaw-контейнер. Workspace-ы хранятся **вне репозитория** (для gitignored персонализации):
 ```
-instances/<name>/workspace/
+../<name>-workspace/          # ../admin-workspace/, ../alexey-workspace/, ...
   SOUL.md           # персонаж и стиль общения
   IDENTITY.md       # имя, эмодзи, вайб
   USER.md           # контекст сотрудника (роль, часовой пояс)
