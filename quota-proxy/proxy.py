@@ -15,7 +15,7 @@ Hardening:
   - Лимиты в SQLite (переживают рестарт, меняются без рестарта)
 """
 
-import json, os, pwd, grp, signal, sqlite3, threading, time, hmac, hashlib, collections
+import json, os, pwd, grp, signal, sqlite3, threading, time, hmac, hashlib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from urllib.request import Request, urlopen

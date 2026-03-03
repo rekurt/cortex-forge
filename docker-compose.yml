@@ -10,11 +10,13 @@ services:
     container_name: corp-cliproxyapi
     restart: unless-stopped
     volumes:
-      - ./cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml:ro
+      - ./cliproxyapi/config.yaml:/CLIProxyAPI/config.template.yaml:ro
+      - ./cliproxyapi/entrypoint.sh:/entrypoint.sh:ro
       - cliproxyapi-auths:/root/.cli-proxy-api
       - cliproxyapi-logs:/CLIProxyAPI/logs
     environment:
       - CLIPROXY_API_KEY=${CLIPROXY_API_KEY}
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
     networks:
       - corp-egress
     deploy:
@@ -25,7 +27,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8317/v1/models"]
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8317/v1/models"]
       interval: 30s
       timeout: 10s
       retries: 5
