@@ -5,16 +5,15 @@ description: Отправить сообщение другому корпора
 
 # corp-messenger — Межинстансный мессенджер
 
-Все сообщения проходят через service-agent как доверенный ретранслятор.
-У service-agent есть общий inbox — все инстансы читают и отправляют через него.
-
-**Важно:** Sender в брокере — всегда `"service"` (BROKER_KEY service-agent).
-Чтобы получатель знал, кто написал, указывай своё имя в тексте сообщения.
+Все сообщения проходят через service-agent как доверенный прокси.
+Service-agent отправляет и читает inbox **от имени caller'а** — получатель видит реального отправителя.
 
 ## Вызов через service-agent
 
 Все действия выполняются через HTTP API service-agent.
 Endpoint: `POST http://corp-service:8090/v1/run`
+
+**Авторизация:** заголовок `Authorization: Bearer $SERVICE_API_KEY` (переменная окружения `SERVICE_API_KEY`).
 
 ### Отправить сообщение
 
@@ -25,7 +24,7 @@ Endpoint: `POST http://corp-service:8090/v1/run`
   "params": {
     "action": "send",
     "to": "vasily",
-    "message": "Привет от nikita, можешь помочь с задачей X?"
+    "message": "Привет, можешь помочь с задачей X?"
   }
 }
 ```
@@ -35,11 +34,11 @@ Endpoint: `POST http://corp-service:8090/v1/run`
 {
   "status": "ok",
   "message": "Sent to vasily",
-  "detail": {"ok": true, "from": "service", "to": "vasily"}
+  "detail": {"ok": true, "from": "nikita", "to": "vasily"}
 }
 ```
 
-### Прочитать входящие (общий inbox service-agent)
+### Прочитать входящие
 
 ```json
 {
@@ -57,7 +56,7 @@ Endpoint: `POST http://corp-service:8090/v1/run`
   "status": "ok",
   "count": 1,
   "inbox": [
-    {"from": "vasily", "to": "service", "message": "Готово!", "ts": 1709312400.0}
+    {"from": "vasily", "to": "nikita", "message": "Готово!", "ts": 1709312400.0}
   ]
 }
 ```
@@ -95,10 +94,17 @@ Endpoint: `POST http://corp-service:8090/v1/run`
 }
 ```
 
+## Как это работает
+
+- `caller` в запросе определяет, от чьего имени действует skill
+- Service-agent выступает доверенным прокси: broker принимает `on_behalf_of` от `service`
+- Отправитель в broker = `caller`, не `service`
+- Inbox читается для `caller`, не для `service`
+
 ## Безопасность
 
-- Все сообщения идут через общий inbox service-agent (`from: "service"`)
-- Sender определяется по BROKER_KEY service-agent, подделать нельзя
+- Прокси-доступ разрешён только `service` и `admin` (PROXY_INSTANCES в broker)
+- Sender определяется по caller в запросе к service-agent, подтверждённому через SERVICE_API_KEY
 - Ключи хранятся в переменных окружения, не в коде
 - Брокер доступен только внутри Docker-сети, снаружи не открыт
 - Rate limit: 10 сообщений в минуту

@@ -152,6 +152,7 @@ service = f"""
     environment:
       - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
       - OPENAI_API_KEY=${{OPENAI_API_KEY}}
+      - SERVICE_API_KEY=${{SERVICE_API_KEY}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
       - NODE_OPTIONS=--max-old-space-size=768

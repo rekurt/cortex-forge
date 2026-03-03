@@ -135,6 +135,7 @@ services:
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
       - WORKSPACE_PARENT=/infra-parent           # для sync-instances.sh и migrate-instances.py
+      - SERVICE_API_KEY=${SERVICE_API_KEY}
       - NODE_OPTIONS=--max-old-space-size=1536
     ports:
       - "127.0.0.1:18789:18789"   # OpenClaw Control UI — http://localhost:18789
