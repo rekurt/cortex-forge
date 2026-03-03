@@ -170,13 +170,15 @@ openclaw.json       # конфиг: Telegram-канал + модель
 ### Admin instance (Prior)
 
 - Имя: **Приор**. Имеет прямой `ANTHROPIC_API_KEY` (не через quota-proxy)
-- Доступ к Docker socket (read-only) и всем workspace-ам через `/infra/instances`
+- Доступ к Docker socket (read-only) и весь проект через `/infra/` (rw)
+- Admin workspace вынесен из репозитория: `../admin-workspace/`
 - Ежечасно запускает `scripts/sync-instances.sh`: миграции, healthcheck, рестарт упавших контейнеров
 
 ### Broker API
 
 - `POST /send` — отправить сообщение (sender определяется по API-ключу, не по body)
-- `GET /inbox` — прочитать входящие
+- `GET /inbox` — прочитать входящие; admin может `GET /inbox?for=<name>` для чтения inbox любого инстанса
+- `GET /inbox/all` — список всех inbox с количеством сообщений (только admin)
 - `DELETE /inbox` — очистить inbox
 - Лимиты: 10 KB/сообщение, 100 сообщений в inbox, 24 часа retention
 

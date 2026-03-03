@@ -44,9 +44,9 @@ DANGER_ZONE = """\
 |---|---|---|---|
 | `/home/node/.openclaw/` | `instances/<name>/openclaw_data/` | rw | Свой инстанс |
 | `/home/node/.openclaw/workspace/` | `../<name>-workspace/` | rw | Свой инстанс |
-| `/shared/skills/` | `shared/skills/` | ro | Все инстансы |
+| `/shared/skills/` | `shared/skills/` | rw (ro для service-agent) | Все инстансы |
 | `/shared/docs/` | `shared/docs/` | rw | Все инстансы |
-| `/shared/compliance-data/` | `shared/compliance-data/` | ro | Все инстансы |
+| `/shared/compliance-data/` | `shared/compliance-data/` | rw (admin), ro (user instances) | Все инстансы |
 | `/infra/` | `./` (корень проекта) | rw | **ТОЛЬКО Приор** |
 | `/var/run/docker.sock` | `/var/run/docker.sock` | ro | **ТОЛЬКО Приор** |
 
@@ -89,10 +89,15 @@ MARKER = "## 🚨 DANGER ZONE"
 
 def apply(workspace: pathlib.Path):
     # Only apply to admin instance
-    if workspace.parent.parent.name != "admin":
-        # Also check direct workspace path (admin has workspace/ not openclaw_data/workspace/)
-        if workspace.parent.name != "admin":
-            return
+    # New convention: ../admin-workspace/
+    # Legacy: instances/admin/openclaw_data/workspace/ or instances/admin/workspace/
+    is_admin = (
+        workspace.name == "admin-workspace"
+        or workspace.parent.parent.name == "admin"
+        or workspace.parent.name == "admin"
+    )
+    if not is_admin:
+        return
 
     agents = workspace / "AGENTS.md"
     if not agents.exists():

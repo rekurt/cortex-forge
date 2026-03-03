@@ -10,13 +10,18 @@ if ! echo "$NAME" | grep -qE '^[a-z][a-z0-9_-]{1,31}$'; then
   exit 1
 fi
 
+if [ "$NAME" = "admin" ]; then
+  echo "❌ Нельзя удалить admin-инстанс"
+  exit 1
+fi
+
 TARGET="instances/$NAME"
 
-[ -d "$TARGET" ] || (echo "❌ Инстанс '$NAME' не найден"; exit 1)
+[ -d "$TARGET" ] || { echo "❌ Инстанс '$NAME' не найден"; exit 1; }
 
 echo "⚠️  Удаляем инстанс: $NAME"
-read -p "Уверен? (yes/no): " CONFIRM
-[ "$CONFIRM" = "yes" ] || (echo "Отмена."; exit 0)
+read -rp "Уверен? (yes/no): " CONFIRM
+[ "$CONFIRM" = "yes" ] || { echo "Отмена."; exit 0; }
 
 # Останавливаем контейнер
 docker compose stop "assistant-$NAME" 2>/dev/null || true
@@ -24,12 +29,22 @@ docker compose rm -f "assistant-$NAME" 2>/dev/null || true
 
 # Архивируем воркспейс перед удалением
 ARCHIVE="backups/${NAME}-$(date +%Y%m%d).tar.gz"
+WORKSPACE="../${NAME}-workspace"
 mkdir -p backups
-tar -czf "$ARCHIVE" "$TARGET/workspace" 2>/dev/null || true
-echo "📦 Архив сохранён: $ARCHIVE"
+if tar -czf "$ARCHIVE" "$WORKSPACE" "$TARGET" 2>/dev/null; then
+    echo "📦 Архив: $ARCHIVE"
+else
+    echo "⚠️  Архив не создан (возможно, воркспейс отсутствует)"
+    read -rp "Продолжить удаление без архива? (yes/no): " CONFIRM_DEL
+    [ "$CONFIRM_DEL" = "yes" ] || { echo "Отмена."; exit 0; }
+fi
 
-# Удаляем директорию
+# Удаляем директорию инстанса и внешний воркспейс
 rm -rf "$TARGET"
+if [ -d "$WORKSPACE" ]; then
+    rm -rf "$WORKSPACE"
+    echo "✅ Воркспейс '$WORKSPACE' удалён"
+fi
 echo "✅ Инстанс '$NAME' удалён"
 
 # Удаляем ключи из глобального .env
@@ -51,6 +66,8 @@ print(f'  ✅ Удалено {removed} ключей из .env')
 fi
 
 # Удаляем сервис из docker-compose.override.yml (построчный парсинг — безопаснее regex)
+OVERRIDE="docker-compose.override.yml"
+if [ -f "$OVERRIDE" ]; then
 python3 -c "
 import sys
 name = sys.argv[1]
@@ -90,6 +107,9 @@ if found:
 else:
     print(f'  ⚠️  assistant-{name} не найден в docker-compose.override.yml')
 " "$NAME"
+else
+    echo "  ⚠️  docker-compose.override.yml не найден — пропускаем"
+fi
 
 echo ""
 echo "✅ Удаление '$NAME' завершено полностью"

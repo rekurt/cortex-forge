@@ -8,6 +8,7 @@ set -euo pipefail
 INFRA="/infra"
 INSTANCES="$INFRA/instances"
 ADMIN_INSTANCE="admin"
+WORKSPACE_PARENT="${WORKSPACE_PARENT:-$INFRA/..}"
 CHANGES=()
 
 # ─── 1. Миграции ────────────────────────────────────────────────────────────
@@ -16,15 +17,15 @@ if echo "$MIGRATE_OUT" | grep -qv "актуален"; then
     CHANGES+=("Миграции: $MIGRATE_OUT")
 fi
 
-# ─── 2. Эталонный HEARTBEAT (берём из никиты как эталон) ───────────────────
-HEARTBEAT_REF="$INSTANCES/nikita/openclaw_data/workspace/HEARTBEAT.md"
+# ─── 2. Эталонный HEARTBEAT (берём из шаблона) ────────────────────────────
+HEARTBEAT_REF="$INSTANCES/_template/workspace/HEARTBEAT.md"
 
 for INST_DIR in "$INSTANCES"/*/; do
     NAME=$(basename "$INST_DIR")
     [ "$NAME" = "_template" ] && continue
     [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Приора свой HEARTBEAT
 
-    WS="$INST_DIR/openclaw_data/workspace"
+    WS="$WORKSPACE_PARENT/${NAME}-workspace"
     [ -d "$WS" ] || continue
 
     HB="$WS/HEARTBEAT.md"
@@ -41,13 +42,14 @@ done
 for INST_DIR in "$INSTANCES"/*/; do
     NAME=$(basename "$INST_DIR")
     [ "$NAME" = "_template" ] && continue
+    [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # admin manages itself
 
     CONTAINER="corp-$NAME"
     STATUS=$(docker inspect --format '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "not_found")
 
     if [ "$STATUS" != "running" ]; then
-        # Пробуем поднять
-        docker compose -f "$INFRA/docker-compose.yml" up -d "$CONTAINER" 2>&1 || true
+        # Пробуем поднять (cd в /infra/ чтобы compose нашёл и base, и override)
+        (cd "$INFRA" && docker compose up -d "assistant-$NAME" 2>&1) || true
         CHANGES+=("[$NAME] контейнер был '$STATUS' — попытка запуска")
     fi
 done
