@@ -306,6 +306,7 @@ class Handler(BaseHTTPRequestHandler):
         """Читает тело с лимитом размера."""
         length = int(self.headers.get("Content-Length", 0))
         if length > MAX_BODY_BYTES:
+            self.close_connection = True
             return None  # тело слишком большое
         return self.rfile.read(length) if length else b""
 

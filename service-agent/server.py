@@ -387,6 +387,7 @@ def send_json(handler, data: dict, status: int = 200):
 def read_body(handler) -> bytes | None:
     length = int(handler.headers.get("Content-Length", "0"))
     if length > MAX_BODY_BYTES:
+        handler.close_connection = True
         return None
     return handler.rfile.read(length) if length else b""
 
