@@ -143,7 +143,7 @@ openclaw.json   # конфиг: Telegram-канал + модель
 ## Configuration
 
 Переменные в корневом `.env` (шаблон: `.env.example`):
-- `ANTHROPIC_API_KEY` — опционален при использовании CLIProxyAPI; fallback для прямого доступа к Anthropic API
+- `ANTHROPIC_API_KEY` — обязателен для admin-инстанса (ходит напрямую); для остальных опционален при использовании CLIProxyAPI
 - `CLIPROXY_API_KEY` — ключ авторизации quota-proxy → CLIProxyAPI (генерируется: `python3 -c "import secrets; print('clip-' + secrets.token_urlsafe(24))"`)
 - `QUOTA_ADMIN_TOKEN` — 32+ символов
 - `QUOTA_KEY_<NAME>`, `QUOTA_LIMIT_<NAME>`, `BROKER_KEY_<NAME>` — генерируются скриптом `add-user.sh`
