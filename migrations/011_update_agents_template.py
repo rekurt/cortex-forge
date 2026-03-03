@@ -29,7 +29,7 @@ AGENTS_MD = """\
 
 ## Общие скиллы
 
-Корпоративные скиллы доступны в `/shared/skills/` (только чтение!).
+Корпоративные скиллы доступны в `/shared/skills/`.
 Читай их `SKILL.md` перед использованием.
 
 | Скилл | Путь | Когда использовать |
@@ -38,6 +38,10 @@ AGENTS_MD = """\
 | `corp-messenger` | `/shared/skills/corp-messenger/` | Написать другому корпоративному боту / прочитать входящие |
 | `corp-humor` | `/shared/skills/corp-humor/` | Лёгкая ирония — органично, не в каждом сообщении |
 | `compliance-risk` | `/shared/skills/compliance-risk/` | Проверка контрагента по ИНН, санкционный скрининг |
+| `corp-docs` | `/shared/skills/corp-docs/` | Корпоративная база знаний — поиск и сохранение документов |
+| `doc-translator` | `/shared/skills/doc-translator/` | Переписать документ для другой аудитории (юристы, бизнес, разработчики) |
+| `qmd` | `/shared/skills/qmd/` | Полнотекстовый поиск по .md файлам (workspace, docs, skills) |
+| `yandex-oauth` | `/shared/skills/yandex-oauth/` | Яндекс-инфраструктура: Трекер, Телемост, Календарь, Почта |
 
 ## Инструменты
 
@@ -47,8 +51,15 @@ AGENTS_MD = """\
 
 def apply(workspace: pathlib.Path):
     # Пропускаем admin — у него своя подробная версия
-    if workspace.parent.parent.name == "admin":
+    is_admin = (
+        workspace.name == "admin-workspace"
+        or workspace.parent.parent.name == "admin"
+        or workspace.parent.name == "admin"
+    )
+    if is_admin:
         return
 
     agents = workspace / "AGENTS.md"
+    if agents.exists() and agents.read_text() == AGENTS_MD:
+        return
     agents.write_text(AGENTS_MD)

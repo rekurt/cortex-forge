@@ -36,6 +36,11 @@ fi
 TEMPLATE="instances/_template"
 TARGET="instances/$NAME"
 
+if [ "$NAME" = "admin" ]; then
+  echo "❌ Имя 'admin' зарезервировано"
+  exit 1
+fi
+
 [ -d "$TARGET" ] && echo "❌ Инстанс '$NAME' уже существует" && exit 1
 
 # Проверяем существование директории шаблона
@@ -46,10 +51,9 @@ fi
 
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
-mkdir -p "$TARGET/openclaw_data/workspace/memory"
-mkdir -p "$TARGET/openclaw_data/workspace/skills"
+mkdir -p "$TARGET/openclaw_data"
 
-# Создаём workspace в корне репо (трекается в git)
+# Создаём workspace вне репо (рядом с корнем проекта)
 REPO_WORKSPACE="../${NAME}-workspace"
 if [ ! -d "$REPO_WORKSPACE" ]; then
     cp -r "$TEMPLATE/workspace/" "$REPO_WORKSPACE"
@@ -61,28 +65,19 @@ USER.md
 GITEOF
     echo "  ✅ Workspace создан в ${NAME}-workspace/"
 fi
+mkdir -p "$REPO_WORKSPACE/skills" "$REPO_WORKSPACE/memory"
 
-# Копируем шаблоны воркспейса
-# Используем явный массив для проверки наличия файлов (защита от пустого glob)
-shopt -s nullglob
-TEMPLATE_FILES=("$TEMPLATE/workspace/"*)
-shopt -u nullglob
-if [ ${#TEMPLATE_FILES[@]} -eq 0 ]; then
-  echo "⚠️  В директории шаблона нет файлов: $TEMPLATE/workspace — пропускаем копирование"
-else
-  cp -r "${TEMPLATE_FILES[@]}" "$TARGET/openclaw_data/workspace/"
-fi
-# Используем Python для подстановки — безопасно для спецсимволов в FULL_NAME (/, &, \)
+# Подставляем переменные в workspace (безопасно для спецсимволов в FULL_NAME)
 python3 -c "
 import sys, pathlib
-name, full_name = sys.argv[1], sys.argv[2]
+name, full_name, ws = sys.argv[1], sys.argv[2], sys.argv[3]
 for fname in ['USER.md', 'IDENTITY.md']:
-    p = pathlib.Path(f'$TARGET/openclaw_data/workspace/{fname}')
+    p = pathlib.Path(ws) / fname
     if p.exists():
         text = p.read_text()
         text = text.replace('{{FULL_NAME}}', full_name).replace('{{NAME}}', name)
         p.write_text(text)
-" "$NAME" "$FULL_NAME"
+" "$NAME" "$FULL_NAME" "$REPO_WORKSPACE"
 
 # Генерируем ключи
 BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
@@ -109,6 +104,8 @@ BROKER_KEY=$BROKER_KEY
 # GITLAB_TOKEN=
 EOF
 
+chmod 600 "$TARGET/.env"
+
 # OpenClaw конфиг — кладём внутрь openclaw_data/ (единственный mount)
 cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw_data/openclaw.json"
 python3 -c "
@@ -122,6 +119,7 @@ p.write_text(text)
 
 # Выставляем владельца — OpenClaw работает от uid 1000 (node)
 chown -R 1000:1000 "$TARGET/openclaw_data" 2>/dev/null || true
+chown -R 1000:1000 "$REPO_WORKSPACE" 2>/dev/null || true
 
 # Добавляем ключи в глобальный .env
 if [ -f ".env" ]; then
@@ -150,14 +148,14 @@ service = f"""
     volumes:
       - ./instances/{name}/openclaw_data:/home/node/.openclaw
       - ../{name}-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
+      - ./shared/skills:/shared/skills
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
-      - NODE_OPTIONS=--max-old-space-size=1024
+      - NODE_OPTIONS=--max-old-space-size=768
     ports:
       - "127.0.0.1:{ui_port}:18789"   # OpenClaw Control UI
     networks:
@@ -199,5 +197,5 @@ echo "   Control UI: http://localhost:$UI_PORT"
 echo ""
 echo "📋 Далее:"
 echo "  1. nano instances/$NAME/.env               — персональные токены"
-echo "  2. nano instances/$NAME/workspace/SOUL.md  — настроить персонажа"
+echo "  2. nano ../${NAME}-workspace/SOUL.md        — настроить персонажа"
 echo "  3. make deploy"

@@ -13,11 +13,12 @@ Hardening:
 
 import json, os, signal, time, hashlib, hmac, threading, sqlite3
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 MAX_MSG_BYTES = 10 * 1024   # 10KB на сообщение
 MAX_INBOX     = 100
 MAX_AGE_SEC   = 86400
+ADMIN_INSTANCE = "admin"
 
 BROKER_DB = os.environ.get("BROKER_DB", "/data/broker.db")
 
@@ -187,9 +188,11 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
 
         if path == "/health":
+            _cleanup()
             counts = _db_counts()
             self._json(200, {
                 "status": "ok",
@@ -198,12 +201,35 @@ class Handler(BaseHTTPRequestHandler):
             })
             return
 
+        if path == "/inbox/all":
+            sender = _auth(self)
+            if not sender:
+                self._json(403, {"error": "Unauthorized"}); return
+            if sender != ADMIN_INSTANCE:
+                self._json(403, {"error": "Admin only"}); return
+            _cleanup()
+            counts = _db_counts()
+            self._json(200, {"inboxes": counts})
+            return
+
         if path == "/inbox":
             sender = _auth(self)
             if not sender:
                 self._json(403, {"error": "Unauthorized"}); return
+
+            target = sender
+            qs = parse_qs(parsed.query)
+            for_param = qs.get("for", [None])[0]
+            if for_param:
+                if sender != ADMIN_INSTANCE:
+                    self._json(403, {"error": "Admin only"}); return
+                target = for_param.lower().strip()
+                known = set(_keys.values())
+                if target not in known:
+                    self._json(404, {"error": "Unknown instance"}); return
+
             _cleanup()
-            msgs = _db_inbox(sender)
+            msgs = _db_inbox(target)
             self._json(200, {"inbox": msgs, "count": len(msgs)})
             return
 

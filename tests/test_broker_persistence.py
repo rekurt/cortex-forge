@@ -27,6 +27,7 @@ _test_db = os.path.join(_tmpdir, "test_broker.db")
 os.environ["BROKER_DB"] = _test_db
 os.environ["BROKER_KEY_ALICE"] = "alice-secret-key"
 os.environ["BROKER_KEY_BOB"] = "bob-secret-key"
+os.environ["BROKER_KEY_ADMIN"] = "admin-secret-key"
 
 import broker
 
@@ -225,6 +226,71 @@ class TestBrokerPersistence(unittest.TestCase):
         ).fetchall()
         conn.close()
         self.assertEqual(len(rows), 0)
+
+    # ── Admin privileges ──────────────────────────────────────────────────
+
+    def test_admin_read_other_inbox(self):
+        """Admin can read another instance's inbox via ?for=<name>."""
+        # Clear bob's inbox and send a message
+        self._request("DELETE", "/inbox", key="bob-secret-key")
+        self._request("POST", "/send",
+                      {"to": "bob", "message": "admin test msg"},
+                      key="alice-secret-key")
+
+        # Admin reads bob's inbox
+        code, body = self._request("GET", "/inbox?for=bob", key="admin-secret-key")
+        self.assertEqual(code, 200)
+        self.assertGreaterEqual(body["count"], 1)
+        messages = [m for m in body["inbox"] if m["message"] == "admin test msg"]
+        self.assertGreater(len(messages), 0)
+
+    def test_admin_read_own_inbox(self):
+        """Admin can read own inbox without ?for param."""
+        self._request("DELETE", "/inbox", key="admin-secret-key")
+        self._request("POST", "/send",
+                      {"to": "admin", "message": "msg for admin"},
+                      key="alice-secret-key")
+
+        code, body = self._request("GET", "/inbox", key="admin-secret-key")
+        self.assertEqual(code, 200)
+        messages = [m for m in body["inbox"] if m["message"] == "msg for admin"]
+        self.assertGreater(len(messages), 0)
+
+    def test_non_admin_cannot_use_for_param(self):
+        """Non-admin instances cannot use ?for= to read other inboxes."""
+        code, body = self._request("GET", "/inbox?for=bob", key="alice-secret-key")
+        self.assertEqual(code, 403)
+        self.assertIn("Admin only", body["error"])
+
+    def test_admin_for_unknown_instance(self):
+        """Admin gets 404 when using ?for= with unknown instance."""
+        code, body = self._request("GET", "/inbox?for=nonexistent", key="admin-secret-key")
+        self.assertEqual(code, 404)
+        self.assertIn("Unknown instance", body["error"])
+
+    def test_inbox_all_admin_only(self):
+        """GET /inbox/all is admin-only."""
+        # Non-admin gets 403
+        code, body = self._request("GET", "/inbox/all", key="alice-secret-key")
+        self.assertEqual(code, 403)
+        self.assertIn("Admin only", body["error"])
+
+    def test_inbox_all_no_auth(self):
+        """GET /inbox/all requires auth."""
+        code, body = self._request("GET", "/inbox/all")
+        self.assertEqual(code, 403)
+
+    def test_inbox_all_returns_counts(self):
+        """Admin can see all inbox counts via /inbox/all."""
+        # Clear and send some messages
+        self._request("DELETE", "/inbox", key="bob-secret-key")
+        broker._db_insert("alice", "bob", "count test all", time.time())
+
+        code, body = self._request("GET", "/inbox/all", key="admin-secret-key")
+        self.assertEqual(code, 200)
+        self.assertIn("inboxes", body)
+        self.assertIn("bob", body["inboxes"])
+        self.assertGreaterEqual(body["inboxes"]["bob"], 1)
 
 
 if __name__ == "__main__":

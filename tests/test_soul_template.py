@@ -119,15 +119,23 @@ class TestTemplateIdentityMd(unittest.TestCase):
 class TestAdminSoulNotModified(unittest.TestCase):
     """Ensure admin SOUL.md is separate from template."""
 
+    ADMIN_WORKSPACE = os.path.join(REPO_ROOT, "..", "admin-workspace")
+
     def test_admin_soul_exists(self):
-        """Admin SOUL.md must exist."""
-        path = os.path.join(REPO_ROOT, "instances/admin/workspace/SOUL.md")
+        """Admin SOUL.md must exist (skipped if workspace not deployed)."""
+        path = os.path.join(self.ADMIN_WORKSPACE, "SOUL.md")
+        if not os.path.exists(self.ADMIN_WORKSPACE):
+            self.skipTest("admin-workspace not deployed (lives outside repo)")
         self.assertTrue(os.path.exists(path),
-                        "Admin SOUL.md must exist")
+                        "Admin SOUL.md must exist in ../admin-workspace/")
 
     def test_admin_soul_differs_from_template(self):
         """Admin SOUL.md must NOT have the template's workaround section."""
-        admin_soul = _read_file("instances/admin/workspace/SOUL.md")
+        path = os.path.join(self.ADMIN_WORKSPACE, "SOUL.md")
+        if not os.path.exists(path):
+            self.skipTest("admin-workspace not deployed (lives outside repo)")
+        with open(path) as f:
+            admin_soul = f.read()
         self.assertNotIn("Workaround", admin_soul,
                           "Admin SOUL.md must NOT contain the template's Workaround section")
 
