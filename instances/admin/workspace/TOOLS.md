@@ -70,7 +70,7 @@ cd /infra && python3 scripts/migrate-instances.py --dry-run # посмотрет
 |------|-----|--------------|-----------|
 | corp-internal | internal: true | Все контейнеры | Брокер + quota-proxy (нет интернета) |
 | corp-admin | internal: true | admin + quota-proxy + monitor | Admin API для квот и метрик |
-| corp-egress | bridge | Только quota-proxy | Выход в api.anthropic.com |
+| corp-egress | bridge | quota-proxy + cliproxyapi | Выход в api.anthropic.com (CLIProxyAPI OAuth) |
 | corp-outbound | bridge | admin + инстансы | Telegram API, внешние API |
 | corp-services | bridge | service-agent | Backend-интеграции |
 

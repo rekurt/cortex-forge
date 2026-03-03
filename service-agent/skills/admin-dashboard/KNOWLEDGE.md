@@ -8,7 +8,7 @@
 
 | Переменная | Где живёт | Значение | Кто использует |
 |---|---|---|---|
-| ANTHROPIC_API_KEY (корневой .env) | Только quota-proxy | sk-ant-xxx (реальный ключ) | quota-proxy для форвардинга в api.anthropic.com |
+| ANTHROPIC_API_KEY (корневой .env) | Только quota-proxy | sk-ant-xxx (реальный ключ) | quota-proxy (admin) / CLIProxyAPI OAuth (остальные через UPSTREAM_URL) |
 | ANTHROPIC_API_KEY (в docker env инстанса) | docker-compose.yml | = QUOTA_KEY_NIKITA (НЕ реальный ключ!) | OpenClaw через openclaw.json |
 | QUOTA_KEY_\<NAME\> | Корневой .env → docker-compose.yml mapping | quota-\<name\>-xxx | Подставляется как ANTHROPIC_API_KEY инстанса |
 | QUOTA_ADMIN_TOKEN | Корневой .env | 32+ символов | Admin API quota-proxy, admin-dashboard |
@@ -22,7 +22,7 @@
 2. quota-proxy хэширует ключ через SHA256
 3. Сравнивает с хэшами QUOTA_KEY_\* из корневого .env (constant-time через hmac.compare_digest)
 4. Если совпал — определяет имя инстанса, проверяет лимит
-5. Подставляет РЕАЛЬНЫЙ sk-ant-xxx ключ и форвардит в api.anthropic.com
+5. Форвардит в upstream (по умолчанию CLIProxyAPI — OAuth-прокси для Claude Max; admin ходит напрямую в api.anthropic.com)
 6. Логирует расход токенов в SQLite
 
 ### Почему в openclaw.json стоит ANTHROPIC_API_KEY = quota key
@@ -38,7 +38,7 @@
 |---|---|---|---|
 | corp-internal | internal: true | Все инстансы, broker, quota-proxy, monitor, service-agent | Внутренняя шина. Нет выхода в интернет |
 | corp-admin | internal: true | quota-proxy, monitor, admin | Управление квотами и метриками |
-| corp-egress | bridge (не internal) | ТОЛЬКО quota-proxy | Единственный выход к api.anthropic.com |
+| corp-egress | bridge (не internal) | quota-proxy + cliproxyapi | Выход в api.anthropic.com (CLIProxyAPI OAuth + quota-proxy) |
 | corp-outbound | bridge (не internal) | admin, инстансы | Telegram API, внешние сервисы |
 | corp-services | bridge | service-agent | Backend-интеграции |
 
