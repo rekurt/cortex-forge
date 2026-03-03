@@ -7,6 +7,7 @@
 import sys
 import importlib.util
 import pathlib
+import os
 
 REPO_ROOT   = pathlib.Path(__file__).parent.parent
 OVERRIDES   = REPO_ROOT.parent / "overrides"
@@ -41,6 +42,41 @@ def mark_applied(workspace, migration_id):
     applied.add(migration_id)
     f.write_text("\n".join(sorted(applied)) + "\n")
 
+def _workspace_parent():
+    """Resolve parent directory containing external workspaces.
+
+    Inside the admin container WORKSPACE_PARENT=/infra-parent.
+    On the host, falls back to REPO_ROOT.parent.
+    """
+    env = os.environ.get("WORKSPACE_PARENT")
+    if env:
+        return pathlib.Path(env)
+    return REPO_ROOT.parent
+
+def _discover_instances():
+    """Find instances and their workspace paths.
+
+    Workspaces live outside the repo: ../<name>-workspace/
+    (admin uses ../admin-workspace/). Falls back to legacy
+    openclaw_data/workspace/ for backwards compatibility.
+    """
+    parent = _workspace_parent()
+    result = []
+    for d in sorted(INSTANCES.iterdir()):
+        if not d.is_dir() or d.name == "_template":
+            continue
+        # New convention: workspace outside repo
+        ws_name = "admin-workspace" if d.name == "admin" else f"{d.name}-workspace"
+        external_ws = parent / ws_name
+        if external_ws.exists():
+            result.append((d, external_ws))
+            continue
+        # Legacy: workspace inside openclaw_data
+        legacy_ws = d / "openclaw_data" / "workspace"
+        if legacy_ws.exists():
+            result.append((d, legacy_ws))
+    return result
+
 def run():
     updated = []
 
@@ -48,19 +84,13 @@ def run():
         print("  Нет миграций.")
         return updated
 
-    instances = [
-        d for d in INSTANCES.iterdir()
-        if d.is_dir()
-        and d.name not in ("_template",)
-        and (d / "openclaw_data" / "workspace").exists()
-    ]
+    instances = _discover_instances()
 
     if not instances:
         print("  Нет инстансов для обновления.")
         return updated
 
-    for instance_dir in sorted(instances):
-        workspace = instance_dir / "openclaw_data" / "workspace"
+    for instance_dir, workspace in instances:
         applied   = get_applied(workspace)
         pending   = [m for m in MIGRATIONS if m.stem not in applied]
 

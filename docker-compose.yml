@@ -107,8 +107,8 @@ services:
       timeout: 5s
 
   # ════════════════════════════════════════════════════
-  # ADMIN — управляет инфрой, видит только нужные папки
-  # НЕ монтирует .env (не видит ANTHROPIC_API_KEY)
+  # ADMIN — управляет инфрой, весь проект в /infra/ (rw)
+  # ANTHROPIC_API_KEY передаётся через environment
   # Подключён к corp-admin (для quota API) + corp-internal (для broker)
   # ════════════════════════════════════════════════════
   assistant-admin:
@@ -119,15 +119,14 @@ services:
     volumes:
       - ./instances/admin/openclaw_data:/home/node/.openclaw
       - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
-      - ./shared/skills:/shared/skills:ro
+      - ./shared/skills:/shared/skills
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data
-      - ./instances/admin/workspace:/home/node/.openclaw/workspace
+      - ../admin-workspace:/home/node/.openclaw/workspace
       - ./instances/admin/openclaw.json:/home/node/.openclaw/openclaw.json
-      # Монтируем только то, что нужно для управления — НЕ .env с ключами
-      - ./instances:/infra/instances         # воркспейсы инстансов
-      - ./scripts:/infra/scripts:ro          # скрипты управления (read-only)
-      - ./shared:/infra/shared:ro            # shared skills
+      # Весь проект (rw) — admin уже имеет ANTHROPIC_API_KEY через environment
+      - ./:/infra/
+      - ../:/infra-parent/    # доступ к внешним воркспейсам (../<name>-workspace/)
       - /var/run/docker.sock:/var/run/docker.sock:ro  # статус контейнеров (read-only)
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
@@ -135,6 +134,7 @@ services:
       - BROKER_KEY=${BROKER_KEY_ADMIN}
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
+      - WORKSPACE_PARENT=/infra-parent           # для sync-instances.sh и migrate-instances.py
       - NODE_OPTIONS=--max-old-space-size=1536
     ports:
       - "127.0.0.1:18789:18789"   # OpenClaw Control UI — http://localhost:18789
@@ -156,41 +156,11 @@ services:
         condition: service_healthy
 
   # ════════════════════════════════════════════════════
-  # ПЕРСОНАЛЬНЫЕ ИНСТАНСЫ
-  # Шаблон — добавляется через: make add-user NAME=x BOT_TOKEN=y TG_ID=z
+  # ПЕРСОНАЛЬНЫЕ ИНСТАНСЫ → docker-compose.override.yml (gitignored)
+  # Добавляются через: make add-user NAME=x BOT_TOKEN=y TG_ID=z
+  # Удаляются через: make remove-user NAME=x
   # Изолированы: нет /infra, нет corp-admin сети
   # ════════════════════════════════════════════════════
-
-  # assistant-nikita:
-  #   image: ghcr.io/openclaw/openclaw:latest
-  #   container_name: corp-nikita
-  #   restart: unless-stopped
-  #   env_file: instances/nikita/.env
-  #   volumes:
-  #     - ./instances/nikita/workspace:/home/user/.openclaw/workspace
-  #     - ./instances/nikita/openclaw.json:/home/user/.openclaw/openclaw.json:ro
-  #     - ./shared/skills:/shared/skills
-  #     # НЕТ /infra, НЕТ docker.sock, НЕТ .env с реальным ключом
-  #   environment:
-  #     - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}     # квота-ключ, не реальный
-  #     - ANTHROPIC_BASE_URL=http://quota-proxy:9090
-  #     - BROKER_URL=http://message-broker:8080
-  #     - BROKER_KEY=${BROKER_KEY_NIKITA}
-  #   networks:
-  #     - corp-internal   # broker + quota-proxy, но НЕ corp-admin
-  #     - corp-outbound   # Telegram API + внешние вызовы
-  #   security_opt:
-  #     - no-new-privileges:true
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: "2.0"
-  #         memory: 1G
-  #   depends_on:
-  #     quota-proxy:
-  #       condition: service_healthy
-  #     message-broker:
-  #       condition: service_healthy
 
   # ════════════════════════════════════════════════════
   # RESOURCE MONITOR — метрики контейнеров, диска, квот
@@ -280,111 +250,6 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-
-  assistant-nikita:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: corp-nikita
-    restart: unless-stopped
-    env_file:
-      - instances/nikita/.env
-    volumes:
-      - ./instances/nikita/openclaw_data:/home/node/.openclaw
-      - ../nikita-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
-      - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data:ro
-    environment:
-      - ANTHROPIC_API_KEY=${QUOTA_KEY_NIKITA}
-      - BROKER_URL=http://message-broker:8080
-      - BROKER_KEY=${BROKER_KEY_NIKITA}
-      - NODE_OPTIONS=--max-old-space-size=768
-    networks:
-      - corp-internal
-      - corp-outbound
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-    depends_on:
-      quota-proxy:
-        condition: service_healthy
-      message-broker:
-        condition: service_healthy
-    labels:
-      corp.assistant.role: personal
-      corp.assistant.user: nikita
-
-  assistant-vasily:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: corp-vasily
-    restart: unless-stopped
-    env_file:
-      - instances/vasily/.env
-    volumes:
-      - ./instances/vasily/openclaw_data:/home/node/.openclaw
-      - ../vasily-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
-      - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data:ro
-    environment:
-      - ANTHROPIC_API_KEY=${QUOTA_KEY_VASILY}
-      - BROKER_URL=http://message-broker:8080
-      - BROKER_KEY=${BROKER_KEY_VASILY}
-      - NODE_OPTIONS=--max-old-space-size=768
-    networks:
-      - corp-internal
-      - corp-outbound
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-    depends_on:
-      quota-proxy:
-        condition: service_healthy
-      message-broker:
-        condition: service_healthy
-    labels:
-      corp.assistant.role: personal
-      corp.assistant.user: vasily
-
-  assistant-dmitry:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: corp-dmitry
-    restart: unless-stopped
-    env_file:
-      - instances/dmitry/.env
-    volumes:
-      - ./instances/dmitry/openclaw_data:/home/node/.openclaw
-      - ../dmitry-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills:ro
-      - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data:ro
-    environment:
-      - ANTHROPIC_API_KEY=${QUOTA_KEY_DMITRY}
-      - BROKER_URL=http://message-broker:8080
-      - BROKER_KEY=${BROKER_KEY_DMITRY}
-      - NODE_OPTIONS=--max-old-space-size=768
-    networks:
-      - corp-internal
-      - corp-outbound
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
-    depends_on:
-      quota-proxy:
-        condition: service_healthy
-      message-broker:
-        condition: service_healthy
-    labels:
-      corp.assistant.role: personal
-      corp.assistant.user: dmitry
 
 volumes:
   quota-data:

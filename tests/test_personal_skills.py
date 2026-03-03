@@ -53,12 +53,7 @@ class TestAddUserSkillsDir(unittest.TestCase):
         script_path = os.path.join(PROJECT_ROOT, "scripts", "add-user.sh")
         with open(script_path) as f:
             content = f.read()
-        self.assertIn(
-            "workspace/skills",
-            content,
-            "add-user.sh should create workspace/skills directory",
-        )
-        # Verify it's a mkdir command (not just a comment)
+        # Verify it's a mkdir command that creates skills directory
         self.assertTrue(
             re.search(r'mkdir\s+-p.*skills', content),
             "add-user.sh should have mkdir -p for skills directory",
