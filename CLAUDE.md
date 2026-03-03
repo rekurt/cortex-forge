@@ -8,6 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
+### Prerequisites
+
+Docker 24+, Docker Compose 2.x, Python 3.12+, ShellCheck.
+
 ### Development
 
 ```bash
@@ -21,9 +25,29 @@ make logs NAME=admin
 
 # Перезапустить один инстанс
 make restart NAME=admin
+
+# Установить git hooks (post-merge: автоматические миграции при git pull)
+make install-hooks
 ```
 
-Тесты поднимают реальные `HTTPServer`-ы с моками и не требуют Docker.
+### Testing
+
+Тесты поднимают реальные `HTTPServer`-ы с моками и не требуют Docker. Используют `unittest` из stdlib (pytest опционален).
+
+```bash
+# Все тесты
+python3 -m pytest tests/ -v
+python3 -m unittest discover tests/       # без pytest
+
+# Один тестовый модуль
+python3 -m pytest tests/test_broker_persistence.py -v
+python3 tests/test_broker_persistence.py               # напрямую
+
+# Один тест
+python3 -m pytest tests/test_broker_persistence.py::TestBrokerPersistence::test_send_and_receive -v
+```
+
+**Паттерны тестов:** серверы запускаются в daemon-потоках через `setUpClass` на port 0 (OS выбирает свободный). Env-переменные переопределяются до импорта тестируемого модуля. БД-файлы (`.db`, `-wal`, `-shm`) чистятся в `tearDownClass`. Скиллы тестируются через stdin/stdout JSON subprocess.
 
 ### Security checks (required before PRs)
 
@@ -80,7 +104,7 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 | `quota-proxy` | `quota-proxy/proxy.py` | Квотирование, rate-limit, аудит; форвардит запросы через configurable upstream (CLIProxyAPI или напрямую в Anthropic API) |
 | `broker` | `broker/broker.py` | Шина сообщений между инстансами (SQLite persistence) |
 | `resource-monitor` | `resource-monitor/monitor.py` | Метрики Docker-контейнеров, алерты в broker |
-| `service-agent` | `service-agent/server.py` | HTTP API для вызова скиллов (stdin→stdout JSON) |
+| `service-agent` | `service-agent/server.py` | HTTP API для вызова скиллов (stdin→stdout JSON); лимит 5 параллельных задач, таймаут 120s |
 | `instances/admin` | `instances/admin/` | Инстанс Prior — инфраструктурный контроль, прямой `ANTHROPIC_API_KEY` |
 | `instances/_template` | `instances/_template/` | Шаблон для новых инстансов |
 
@@ -109,6 +133,15 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 
 **Ключевой принцип:** инстансы не могут напрямую достучаться до Anthropic API. Все запросы идут через `quota-proxy`, который форвардит их в configurable upstream — по умолчанию через `CLIProxyAPI` (OAuth), но может работать напрямую с `api.anthropic.com`.
 
+### Quota-proxy upstream modes
+
+Три режима, определяются автоматически по `UPSTREAM_URL` и формату ключа:
+1. **CLIProxyAPI** — `UPSTREAM_URL` не `api.anthropic.com` → заголовок `x-api-key`, `User-Agent: claude-cli/*`
+2. **OAuth** — ключ `sk-ant-oat-*` → добавляет beta-заголовки (`oauth-2025-04-20`, `claude-code-20250219`)
+3. **Standard** — прямой `api.anthropic.com` с `x-api-key`
+
+Rate limits: 300 req/min на инстанс, 60 req/min на admin-эндпоинты.
+
 ### Security model
 
 - Инстансы используют `QUOTA_KEY_<name>` (SHA256-хэш) вместо реального API-ключа
@@ -125,10 +158,9 @@ instances/<name>/workspace/
   SOUL.md           # персонаж и стиль общения
   IDENTITY.md       # имя, эмодзи, вайб
   USER.md           # контекст сотрудника (роль, часовой пояс)
-  TOOLS.md      # инструкции по инструментам и личным скиллам
+  TOOLS.md          # инструкции по инструментам, SSH-хосты, личные скиллы
   AGENTS.md         # доступные агенты
-  skills/       # личные скиллы (приоритет над shared)
-  TOOLS.md          # SSH-хосты, личные API-ключи, инструкции к personal skills
+  skills/           # личные скиллы (приоритет над shared)
   HEARTBEAT.md      # задачи для периодических проверок (пустой = skip)
   memory/           # долгосрочная память
   .migrations_applied  # трекинг миграций (gitignored)
@@ -205,3 +237,11 @@ openclaw.json       # конфиг: Telegram-канал + модель
 | `scripts/fix-permissions.sh` | Восстановить права 600 на .env после git-операций |
 | `scripts/refresh-anthropic-token.sh` | Обновить OAuth-токен из `ANTHROPIC_REFRESH_TOKEN` |
 | `scripts/migrate-instances.py` | Применить миграции ко всем инстансам |
+
+## Gotchas
+
+- **Port assignment**: `add-user.sh` авто-назначает порт как `18790 + N` (N = количество существующих инстансов)
+- **Session cache**: после применения миграций `.jsonl`-файлы кэша **удаляются**, чтобы агент перечитал конфиги
+- **Skills env isolation**: service-agent передаёт subprocess только переменные из `env_vars` в `skills.json` — остальные env не попадают в скилл
+- **SQLite WAL**: все компоненты используют WAL mode + `journal_size_limit=1048576` (1MB); данные переживают рестарт контейнера
+- **Broker sender auth**: отправитель определяется по API-ключу, не по полю body — подменить sender невозможно
