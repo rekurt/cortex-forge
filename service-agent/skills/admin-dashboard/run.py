@@ -27,7 +27,7 @@ MONITOR_URL = os.environ.get("MONITOR_URL", "http://resource-monitor:9091")
 MONITOR_ADMIN_TOKEN = os.environ.get("MONITOR_ADMIN_TOKEN", "")
 BROKER_URL = os.environ.get("BROKER_URL", "http://message-broker:8080")
 
-TIMEOUT = 10  # seconds for HTTP requests
+TIMEOUT = 5  # seconds per HTTP request (4 sequential in overview = 20s max < 30s skill timeout)
 
 KNOWLEDGE_PATH = os.path.join(os.path.dirname(__file__), "KNOWLEDGE.md")
 

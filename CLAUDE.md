@@ -11,18 +11,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Development
 
 ```bash
+# Запустить/пересобрать всё
 make deploy                          # docker compose up -d --build
-make status                          # docker compose ps
-make logs NAME=admin                 # логи конкретного инстанса
-make restart NAME=admin              # перезапустить один инстанс
-make install-hooks                   # post-merge hook: авто-ребилд при git pull
-```
+docker compose ps                    # статус контейнеров
+make status                          # то же самое
 
-### Tests
+# Логи конкретного инстанса
+make logs NAME=admin
 
-```bash
-pytest tests/ -v                     # все тесты (unittest, запускаются через pytest)
-pytest tests/test_broker_persistence.py -v   # один файл
+# Перезапустить один инстанс
+make restart NAME=admin
 ```
 
 Тесты поднимают реальные `HTTPServer`-ы с моками и не требуют Docker.
@@ -40,8 +38,8 @@ make security-check                              # .env-права (600), клю
 ```bash
 make quota-report                      # использование токенов за текущий месяц
 make quota-report MONTH=2026-03        # за конкретный месяц
-make set-limit NAME=alexey LIMIT=500000
-make quota-reset NAME=alexey
+make set-limit NAME=alexey LIMIT=500000  # изменить лимит без рестарта
+make quota-reset NAME=alexey           # сбросить счётчик
 ```
 
 ### User management
@@ -76,17 +74,15 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 
 ### Core components
 
-| Компонент | Путь | Контейнер | Порт |
-|-----------|------|-----------|------|
-| `quota-proxy` | `quota-proxy/proxy.py` | `corp-quota` | `127.0.0.1:9090` |
-| `broker` | `broker/broker.py` | `corp-broker` | — |
-| `resource-monitor` | `resource-monitor/monitor.py` | `corp-monitor` | `127.0.0.1:9091` |
-| `service-agent` | `service-agent/server.py` | `corp-service` | `127.0.0.1:8090` |
-| `instances/admin` | Инстанс Prior | `corp-admin` | `127.0.0.1:18789` |
-
-### How user instances are added
-
-`make add-user` генерирует конфиг в **`docker-compose.override.yml`** (gitignored), а не в основной `docker-compose.yml`. Docker Compose автоматически мержит оба файла. Пользовательские инстансы собираются из `instances/Dockerfile.user` (OpenClaw + ffmpeg + tesseract-ocr + mcporter).
+| Компонент | Путь | Назначение |
+|-----------|------|------------|
+| `cliproxyapi` | `cliproxyapi/config.yaml` | OAuth-прокси для Claude Max; позволяет использовать подписку вместо API-ключа |
+| `quota-proxy` | `quota-proxy/proxy.py` | Квотирование, rate-limit, аудит; форвардит запросы через configurable upstream (CLIProxyAPI или напрямую в Anthropic API) |
+| `broker` | `broker/broker.py` | Шина сообщений между инстансами (SQLite persistence) |
+| `resource-monitor` | `resource-monitor/monitor.py` | Метрики Docker-контейнеров, алерты в broker |
+| `service-agent` | `service-agent/server.py` | HTTP API для вызова скиллов (stdin→stdout JSON) |
+| `instances/admin` | `instances/admin/` | Инстанс Prior — инфраструктурный контроль, прямой `ANTHROPIC_API_KEY` |
+| `instances/_template` | `instances/_template/` | Шаблон для новых инстансов |
 
 ### Service-agent skills
 
@@ -97,47 +93,44 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 | `admin-dashboard` | `service-agent/skills/admin-dashboard/` | Единый центр управления (quota + monitor + broker) |
 | `qmd` | `service-agent/skills/qmd/` | Полнотекстовый поиск по markdown файлам |
 
-Скиллы могут использовать `run.py` (Python) или `run.sh` (Bash) — сервер пробует оба. Только env vars, перечисленные в `skills.json` → `env_vars`, передаются в subprocess через `build_skill_env()`.
+### Personal skills
 
-### Shared skills vs personal skills
-
-- **Shared**: `shared/skills/<name>/SKILL.md` — доступны всем инстансам
-- **Personal**: `workspace/skills/<name>/SKILL.md` — только одному инстансу
-- Приоритет: personal > shared. Документация: `shared/docs/common/SKILLS.md`
+Каждый инстанс может иметь личные скиллы в `workspace/skills/`. Приоритет: personal skills > shared skills. Документация: `shared/docs/common/SKILLS.md`.
 
 ### Network isolation
 
 Пять сетей Docker с намеренной изоляцией:
 
-- **`corp-egress`** — только `quota-proxy` имеет выход в интернет (к `api.anthropic.com`)
+- **`corp-egress`** — `quota-proxy` + `cliproxyapi` имеют выход в интернет (CLIProxyAPI → OAuth Anthropic, quota-proxy → CLIProxyAPI или напрямую в `api.anthropic.com`)
 - **`corp-internal`** (`internal: true`) — все инстансы + broker; нет внешнего роутинга
 - **`corp-admin`** (`internal: true`) — quota-proxy + monitor; нет внешнего роутинга
 - **`corp-services`** — service-agent (backend-интеграции)
 - **`corp-outbound`** — admin + инстансы (Telegram, внешние API)
 
-**Ключевой принцип:** инстансы не могут напрямую достучаться до Anthropic API. Все запросы идут через `quota-proxy`, который подставляет реальный ключ.
+**Ключевой принцип:** инстансы не могут напрямую достучаться до Anthropic API. Все запросы идут через `quota-proxy`, который форвардит их в configurable upstream — по умолчанию через `CLIProxyAPI` (OAuth), но может работать напрямую с `api.anthropic.com`.
 
 ### Security model
 
 - Инстансы используют `QUOTA_KEY_<name>` (SHA256-хэш) вместо реального API-ключа
-- Все токен-сравнения через `hmac.compare_digest()` (constant-time)
+- Все токен-сравнения через `hmac.compare_digest()` (constant-time, защита от timing-атак)
 - Leaky bucket rate-limiting на всех публичных эндпоинтах
 - Все контейнеры — non-root user `app`, `no-new-privileges: true`
-- `quota-proxy` и `broker` — `read_only: true` (tmpfs для /tmp)
-- Квоты и метрики хранятся в SQLite (WAL mode) — переживают рестарты
+- Квоты и метрики хранятся в SQLite (WAL mode) — переживают рестарты без ребилда
 
 ### Instance workspace structure
 
+Каждый инстанс — OpenClaw-контейнер с workspace:
 ```
 instances/<name>/workspace/
   SOUL.md           # персонаж и стиль общения
   IDENTITY.md       # имя, эмодзи, вайб
   USER.md           # контекст сотрудника (роль, часовой пояс)
+  TOOLS.md      # инструкции по инструментам и личным скиллам
   AGENTS.md         # доступные агенты
+  skills/       # личные скиллы (приоритет над shared)
   TOOLS.md          # SSH-хосты, личные API-ключи, инструкции к personal skills
   HEARTBEAT.md      # задачи для периодических проверок (пустой = skip)
   memory/           # долгосрочная память
-  skills/           # personal skills (приоритет над shared)
   .migrations_applied  # трекинг миграций (gitignored)
 openclaw.json       # конфиг: Telegram-канал + модель
 ```
@@ -167,9 +160,8 @@ openclaw.json       # конфиг: Telegram-канал + модель
 
 1. Создать `service-agent/skills/<skill-name>/`
 2. Реализовать `run.py`: читает JSON из stdin, пишет JSON в stdout
-3. Добавить `skills.json` манифест (образец: `compliance/skills.json`). Секреты — в поле `env_vars`
-4. Передать переменные в контейнер `assistant-service` через `docker-compose.yml`
-5. `docker compose build assistant-service && docker compose restart assistant-service`
+3. Добавить `skills.json` манифест (см. `compliance/skills.json` как образец). Если скиллу нужны секреты из окружения (API-ключи и т.п.), объяви их в поле `env_vars` — только они будут переданы в subprocess (`build_skill_env()` в `server.py`). Переменная также должна быть передана в контейнер `assistant-service` через `docker-compose.yml`.
+4. `docker compose build assistant-service && docker compose restart assistant-service`
 
 ## Code conventions
 
@@ -181,25 +173,22 @@ openclaw.json       # конфиг: Telegram-канал + модель
 
 ## CI/CD
 
-- **`security.yml`** — Semgrep (+ кастомные правила в `.github/semgrep/`), Bandit, Trivy, Gitleaks, Hadolint, ShellCheck, pip-audit + `ai_security_check.py`
-- **`lint-commits.yml`** — Conventional Commits + валидация PR title (`amannn/action-semantic-pull-request`). `WIP:` prefix разрешён
-- **`release-please.yml`** — автоматический PR с version bump и `CHANGELOG.md`
-- **`release.yml`** — при tag push (`v*`): security checks → build Docker images → push to GHCR (`ghcr.io/<owner>/cortexforge-<service>`) → SBOM (SPDX) → GitHub Release
+- **`security.yml`** — Semgrep, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck + `ai_security_check.py` (8 кастомных правил)
+- **`lint-commits.yml`** — проверка Conventional Commits
+- **`release-please.yml`** — автоматически открывает PR с version bump и обновлением `CHANGELOG.md`
 - Правило: PR нельзя мёрджить с красными security-checks
 - CODEOWNERS: `@rekurt`. Критичные файлы (`proxy.py`, `broker.py`, `docker-compose.yml`, `security.yml`) требуют явного review
 
 ## Configuration
 
 Переменные в корневом `.env` (шаблон: `.env.example`):
-- `ANTHROPIC_API_KEY` — только здесь, только для `quota-proxy`
-- `ANTHROPIC_REFRESH_TOKEN` — для OAuth-режима (Claude Max вместо API key)
+- `ANTHROPIC_API_KEY` — обязателен для admin-инстанса (ходит напрямую); для остальных опционален при использовании CLIProxyAPI
+- `CLIPROXY_API_KEY` — ключ авторизации quota-proxy → CLIProxyAPI (генерируется: `python3 -c "import secrets; print('clip-' + secrets.token_urlsafe(24))"`)
 - `QUOTA_ADMIN_TOKEN` — 32+ символов
 - `QUOTA_KEY_<NAME>`, `QUOTA_LIMIT_<NAME>`, `BROKER_KEY_<NAME>` — генерируются скриптом `add-user.sh`
-- `QUOTA_DEFAULT_MONTHLY` — дефолтная месячная квота (default: 1,000,000)
-- `BROKER_KEY_SERVICE` — ключ service-agent для broker
-- `SERVICE_API_KEY` — ключ для service-agent API
-- `MONITOR_ADMIN_TOKEN` — ключ для resource-monitor API
-- `DOCKER_GID` — GID группы docker на хосте (default: 999, для resource-monitor)
+- `BROKER_KEY_SERVICE` — ключ service-agent для доступа к broker (corp-messenger skill)
+- `BROKER_KEY_MONITOR` — ключ resource-monitor для отправки алертов в broker
+- `SERVICE_API_KEY` — ключ для авторизации запросов к service-agent API
 
 Переменные инстанса в `instances/<name>/.env`:
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOW_FROM`

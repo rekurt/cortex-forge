@@ -62,6 +62,7 @@ def _init_db():
 def _get_conn():
     """Get a SQLite connection (WAL mode set once in _init_db)."""
     conn = sqlite3.connect(BROKER_DB)
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 
@@ -109,11 +110,8 @@ def _db_clear(recipient: str) -> int:
     """Delete all messages for a recipient. Returns count deleted."""
     conn = _get_conn()
     try:
-        cursor = conn.execute(
-            "SELECT COUNT(*) FROM messages WHERE recipient = ?", (recipient,)
-        )
-        count = cursor.fetchone()[0]
         conn.execute("DELETE FROM messages WHERE recipient = ?", (recipient,))
+        count = conn.execute("SELECT changes()").fetchone()[0]
         conn.commit()
         return count
     finally:
