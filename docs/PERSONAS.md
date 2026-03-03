@@ -74,7 +74,7 @@
 Admin-инстанс имеет зарезервированное имя **Приор** — настоятель монастыря капуцинов, управляющий всеми инстансами.
 
 ```markdown
-# ../admin-workspace/IDENTITY.md
+# instances/admin/workspace/IDENTITY.md
 - Name: Приор
 - Role: Администратор
 - Emoji: 🏛️

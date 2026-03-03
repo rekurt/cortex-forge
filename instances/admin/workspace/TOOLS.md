@@ -56,7 +56,7 @@ cd /infra && python3 scripts/migrate-instances.py --dry-run # посмотрет
 | База квот (SQLite) | `quota-data` Docker volume → `/data/quota.db` |
 | База метрик (SQLite) | `monitor-data` Docker volume → `/data/metrics.db` |
 | Данные инстанса | `instances/<name>/openclaw_data/` |
-| Воркспейс инстанса | `../<name>-workspace/` (вне репозитория) |
+| Воркспейс инстанса | `instances/<name>/workspace/` |
 | Shared-скиллы | `shared/skills/` (ro для инстансов) |
 | Shared-документы | `shared/docs/` (rw для инстансов) |
 | Compliance-данные | `shared/compliance-data/` (ro для инстансов) |

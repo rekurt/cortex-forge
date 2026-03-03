@@ -198,7 +198,7 @@ cd /infra && python3 scripts/migrate-instances.py
 | Путь в контейнере | Хост-путь | Права | Кто видит |
 |---|---|---|---|
 | `/home/node/.openclaw/` | `instances/<name>/openclaw_data/` | rw | Свой инстанс |
-| `/home/node/.openclaw/workspace/` | `../<name>-workspace/` | rw | Свой инстанс |
+| `/home/node/.openclaw/workspace/` | `instances/<name>/workspace/` | rw | Свой инстанс |
 | `/shared/skills/` | `shared/skills/` | ro | Все инстансы |
 | `/shared/docs/` | `shared/docs/` | rw | Все инстансы |
 | `/shared/compliance-data/` | `shared/compliance-data/` | ro | Все инстансы |

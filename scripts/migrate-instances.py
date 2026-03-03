@@ -56,16 +56,21 @@ def _workspace_parent():
 def _discover_instances():
     """Find instances and their workspace paths.
 
-    Workspaces live outside the repo: ../<name>-workspace/
-    (admin uses ../admin-workspace/). Falls back to legacy
-    openclaw_data/workspace/ for backwards compatibility.
+    Primary: instances/<name>/workspace/ (in-repo).
+    Fallback: ../<name>-workspace/ (legacy external convention).
+    Fallback: instances/<name>/openclaw_data/workspace/ (legacy).
     """
     parent = _workspace_parent()
     result = []
     for d in sorted(INSTANCES.iterdir()):
         if not d.is_dir() or d.name == "_template":
             continue
-        # New convention: workspace outside repo
+        # Primary: workspace inside instance directory
+        ws = d / "workspace"
+        if ws.exists():
+            result.append((d, ws))
+            continue
+        # Legacy: external workspace outside repo
         ws_name = "admin-workspace" if d.name == "admin" else f"{d.name}-workspace"
         external_ws = parent / ws_name
         if external_ws.exists():

@@ -45,8 +45,12 @@ shared/skills/corp-greeting/.greeting_counter
 instances/*/.migrations_applied
 instances/*/openclaw_data/.migrations_applied
 
-# User instance workspace files (personal runtime data, not tracked)
-instances/*/workspace/
-!instances/_template/workspace/
-!instances/admin/workspace/
+# Instance workspace runtime data (not tracked)
+instances/*/workspace/memory/
+instances/*/workspace/MEMORY.md
+instances/*/workspace/.openclaw/
+instances/*/workspace/.git/
+instances/*/workspace/.gitignore
+instances/*/workspace/notes-vault/
+instances/*/workspace/BOOTSTRAP.md
 *.lock
