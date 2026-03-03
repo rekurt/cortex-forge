@@ -46,9 +46,11 @@ if lims:
     INSTANCE="$2"
     LIMIT="$3"
     [ -z "$INSTANCE" ] || [ -z "$LIMIT" ] && echo "❌ Использование: quota.sh set-limit <name> <tokens>" && exit 1
+    # Безопасное формирование JSON через Python — экранирует спецсимволы в INSTANCE
+    JSON=$(python3 -c "import json, sys; print(json.dumps({'instance': sys.argv[1], 'limit': int(sys.argv[2])}))" "$INSTANCE" "$LIMIT")
     RESP=$(_curl -X POST "$PROXY_URL/quota/set-limit" \
         -H "Content-Type: application/json" \
-        -d "{\"instance\":\"$INSTANCE\",\"limit\":$LIMIT}")
+        -d "$JSON")
     echo "$RESP" | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
@@ -68,9 +70,11 @@ else:
     INSTANCE="$2"
     MONTH="${3:-$(date +%Y-%m)}"
     [ -z "$INSTANCE" ] && echo "❌ Использование: quota.sh reset <name> [YYYY-MM]" && exit 1
+    # Безопасное формирование JSON через Python — экранирует спецсимволы в INSTANCE и MONTH
+    JSON=$(python3 -c "import json, sys; print(json.dumps({'instance': sys.argv[1], 'month': sys.argv[2]}))" "$INSTANCE" "$MONTH")
     _curl -X POST "$PROXY_URL/quota/reset" \
         -H "Content-Type: application/json" \
-        -d "{\"instance\":\"$INSTANCE\",\"month\":\"$MONTH\"}" | python3 -c "
+        -d "$JSON" | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 print(f\"  ✅ Счётчик {d.get('reset')} сброшен ({d.get('month')})\") if d.get('ok') else print(f\"  ❌ {d.get('error')}\")

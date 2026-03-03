@@ -10,12 +10,15 @@ Python stdlib only. No pip.
 """
 
 import os
+import sys
 import json
 import time
 import socket
 import sqlite3
 import shutil
 import threading
+import hmac
+import hashlib
 import logging
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection
@@ -28,6 +31,7 @@ MONITOR_PORT     = int(os.environ.get("MONITOR_PORT", "9091"))
 MONITOR_INTERVAL = int(os.environ.get("MONITOR_INTERVAL", "60"))
 MONITOR_DB       = os.environ.get("MONITOR_DB", "/data/metrics.db")
 MONITOR_ADMIN_TOKEN = os.environ.get("MONITOR_ADMIN_TOKEN", "")
+_admin_hash         = hashlib.sha256(MONITOR_ADMIN_TOKEN.encode()).hexdigest() if MONITOR_ADMIN_TOKEN else ""
 
 QUOTA_ADMIN_TOKEN = os.environ.get("QUOTA_ADMIN_TOKEN", "")
 QUOTA_PROXY_URL   = os.environ.get("QUOTA_PROXY_URL", "http://quota-proxy:9090")
@@ -46,6 +50,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stdout,
 )
 log = logging.getLogger("monitor")
 
@@ -60,7 +65,9 @@ def _http(method: str, url: str, body: bytes = None, headers: dict = None) -> by
         path += "?" + p.query
     conn = HTTPConnection(host, port, timeout=10)
     try:
-        h = {k: str(v) for k, v in (headers or {}).items()}
+        # HTTP headers must be latin-1 compatible — encode safely to avoid UnicodeEncodeError
+        h = {k: str(v).encode("latin-1", errors="replace").decode("latin-1")
+             for k, v in (headers or {}).items()}
         if body is not None:
             h.setdefault("Content-Length", str(len(body)))
         conn.request(method, path, body=body, headers=h)
@@ -117,7 +124,7 @@ def list_containers() -> list:
             result.append({"id": c.get("Id", ""), "short_id": cid, "name": name})
         return result
     except Exception as e:
-        log.warning(f"list_containers failed: {e}")
+        log.error(f"list_containers: Docker socket error ({DOCKER_SOCK}): {type(e).__name__}: {e}")
         return []
 
 
@@ -262,10 +269,8 @@ def send_alert(key: str, message: str):
     log.warning(f"ALERT [{key}]: {message}")
     try:
         body = json.dumps({
-            "from":    "monitor",
             "to":      "admin",
-            "subject": f"[ALERT] {key}",
-            "body":    message,
+            "message": f"[ALERT {key}] {message}",
         }, ensure_ascii=False).encode("utf-8")
         _http("POST", f"{BROKER_URL}/send", body=body, headers={
             "Content-Type":  "application/json; charset=utf-8",
@@ -277,6 +282,14 @@ def send_alert(key: str, message: str):
 
 def check_alerts(metrics: list, disk: dict, quota: dict):
     """Evaluate thresholds and fire alerts as needed."""
+    # Cleanup expired entries to prevent unbounded memory growth
+    now = time.time()
+    with _lock:
+        expired = [k for k, v in _active_alerts.items()
+                   if now - v.get("fired_at", 0) > ALERT_COOLDOWN]
+        for k in expired:
+            del _active_alerts[k]
+
     for m in metrics:
         name = m["name"]
 
@@ -303,16 +316,16 @@ def check_alerts(metrics: list, disk: dict, quota: dict):
             f"Host disk: {disk['used_pct']:.1f}% used ({disk['used_gb']:.1f}/{disk['total_gb']:.1f} GB) > {ALERT_DISK_PCT}%",
         )
 
-    # Quota alert
-    for instance, info in quota.items():
-        if isinstance(info, dict):
-            used  = info.get("used", 0)
-            limit = info.get("limit", 0)
-            if limit > 0 and used / limit * 100 > ALERT_QUOTA_PCT:
-                send_alert(
-                    f"quota:{instance}",
-                    f"Token quota [{instance}]: {used}/{limit} ({used/limit*100:.1f}%) > {ALERT_QUOTA_PCT}%",
-                )
+    # Quota alert — quota-proxy /quota/report returns {"month": ..., "usage": [...], "limits": {...}}
+    for item in quota.get("usage", []):
+        instance = item.get("instance", "")
+        used  = item.get("total_tokens", 0)
+        limit = item.get("limit", 0)
+        if isinstance(limit, int) and limit > 0 and used / limit * 100 > ALERT_QUOTA_PCT:
+            send_alert(
+                f"quota:{instance}",
+                f"Token quota [{instance}]: {used}/{limit} ({used/limit*100:.1f}%) > {ALERT_QUOTA_PCT}%",
+            )
 
 
 # ── Polling Loop ──────────────────────────────────────────────────────────────
@@ -377,7 +390,10 @@ def require_auth(handler) -> bool:
     auth = handler.headers.get("Authorization", "")
     if not MONITOR_ADMIN_TOKEN:
         return True  # auth disabled (no token configured)
-    if auth == f"Bearer {MONITOR_ADMIN_TOKEN}":
+    if auth.startswith("Bearer ") and hmac.compare_digest(
+        hashlib.sha256(auth[7:].encode()).hexdigest(),
+        _admin_hash,
+    ):
         return True
     handler.send_response(401)
     handler.send_header("Content-Type", "application/json")

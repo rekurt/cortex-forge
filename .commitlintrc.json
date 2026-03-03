@@ -3,10 +3,10 @@
   "rules": {
     "type-enum": [
       2, "always",
-      ["feat", "fix", "security", "perf", "refactor", "docs", "ci", "chore", "test", "build", "revert"]
+      ["feat", "fix", "security", "perf", "refactor", "docs", "ci", "chore", "infra", "test", "build", "revert"]
     ],
     "subject-case": [0],
     "header-max-length": [2, "always", 100],
     "body-max-line-length": [1, "always", 200]
-  }
+  },
 }

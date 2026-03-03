@@ -15,6 +15,7 @@ instances/*/openclaw_data/
 **/__pycache__/
 **/*.py[cod]
 **/.venv/
+logs/*.log
 
 # Личная память — опционально исключить
 # instances/*/workspace/memory/
@@ -35,7 +36,7 @@ Thumbs.db
 
 # ralphex progress logs
 .ralphex/progress/
-/docs/plans/2026-03-01-bugfix-reliability.md
+/docs/plans/*
 
 # Greeting counter state
 shared/skills/corp-greeting/.greeting_counter
