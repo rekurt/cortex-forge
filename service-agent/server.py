@@ -296,7 +296,9 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
             "duration_ms": 0,
         }
 
-    params_json = json.dumps(params, ensure_ascii=False)
+    # Include caller in params so skills can identify who called them
+    skill_params = {**params, "caller": caller}
+    params_json = json.dumps(skill_params, ensure_ascii=False)
 
     # skill_id validated: not in allowed → returned at line 268; allowlist enforced
     try:

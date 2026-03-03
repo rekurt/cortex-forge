@@ -19,6 +19,8 @@ MAX_MSG_BYTES = 10 * 1024   # 10KB на сообщение
 MAX_INBOX     = 100
 MAX_AGE_SEC   = 86400
 ADMIN_INSTANCE = "admin"
+# Instances that can act as proxy: read/send on behalf of other instances
+PROXY_INSTANCES = {"admin", "service"}
 
 BROKER_DB = os.environ.get("BROKER_DB", "/data/broker.db")
 
@@ -221,8 +223,8 @@ class Handler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             for_param = qs.get("for", [None])[0]
             if for_param:
-                if sender != ADMIN_INSTANCE:
-                    self._json(403, {"error": "Admin only"}); return
+                if sender not in PROXY_INSTANCES:
+                    self._json(403, {"error": "Proxy access denied"}); return
                 target = for_param.lower().strip()
                 known = set(_keys.values())
                 if target not in known:
@@ -261,29 +263,56 @@ class Handler(BaseHTTPRequestHandler):
         if not to or not message:
             self._json(400, {"error": "Missing 'to' or 'message'"}); return
 
+        # Proxy: service/admin can send on behalf of another instance
+        effective_sender = sender
+        on_behalf_of = str(body.get("on_behalf_of", "")).lower().strip()
+        if on_behalf_of:
+            if sender not in PROXY_INSTANCES:
+                self._json(403, {"error": "Proxy send denied"}); return
+            known_names = set(_keys.values())
+            if on_behalf_of not in known_names:
+                self._json(404, {"error": f"Unknown sender: {on_behalf_of}"}); return
+            effective_sender = on_behalf_of
+
         known = set(_keys.values())
         if to not in known:
             self._json(404, {"error": f"Unknown recipient: {to}"}); return
-        if to == sender:
+        if to == effective_sender:
             self._json(400, {"error": "Cannot send to yourself"}); return
 
         _cleanup()
-        _db_insert(sender, to, message[:MAX_MSG_BYTES], time.time())
+        _db_insert(effective_sender, to, message[:MAX_MSG_BYTES], time.time())
 
-        print(f"[broker] {sender} → {to}: {message[:60]}", flush=True)
-        self._json(200, {"ok": True, "from": sender, "to": to})
+        print(f"[broker] {effective_sender} → {to}: {message[:60]}"
+              + (f" (via {sender})" if effective_sender != sender else ""),
+              flush=True)
+        self._json(200, {"ok": True, "from": effective_sender, "to": to})
 
     def do_DELETE(self):
-        if urlparse(self.path).path != "/inbox":
+        parsed = urlparse(self.path)
+        if parsed.path != "/inbox":
             self._json(404, {"error": "Not found"}); return
 
         sender = _auth(self)
         if not sender:
             self._json(403, {"error": "Unauthorized"}); return
 
-        count = _db_clear(sender)
+        target = sender
+        qs = parse_qs(parsed.query)
+        for_param = qs.get("for", [None])[0]
+        if for_param:
+            if sender not in PROXY_INSTANCES:
+                self._json(403, {"error": "Proxy access denied"}); return
+            target = for_param.lower().strip()
+            known = set(_keys.values())
+            if target not in known:
+                self._json(404, {"error": "Unknown instance"}); return
 
-        print(f"[broker] {sender} очистил inbox ({count} сообщений)", flush=True)
+        count = _db_clear(target)
+
+        print(f"[broker] {target} очистил inbox ({count} сообщений)"
+              + (f" (via {sender})" if target != sender else ""),
+              flush=True)
         self._json(200, {"ok": True, "deleted": count})
 
 

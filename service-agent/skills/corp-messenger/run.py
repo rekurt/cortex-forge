@@ -5,10 +5,13 @@ Corp Messenger — межинстансный мессенджер CortexForge.
 Skill для service-agent. Читает JSON из stdin, пишет JSON в stdout.
 Все HTTP через urllib.request (stdlib only, без curl).
 
+Service-agent выступает прокси: broker позволяет ему читать/отправлять
+от имени caller'а через on_behalf_of (send) и ?for= (inbox/clear).
+
 Actions:
   send  — отправить сообщение другому инстансу
-  inbox — прочитать свои входящие
-  clear — очистить inbox
+  inbox — прочитать входящие caller'а
+  clear — очистить inbox caller'а
   list  — показать доступные инстансы (без auth)
 """
 
@@ -49,8 +52,8 @@ def _request(method, path, data=None, auth=True):
         return 0, {"error": str(e)}
 
 
-def action_send(params):
-    """POST /send — отправить сообщение."""
+def action_send(params, caller):
+    """POST /send — отправить сообщение от имени caller'а."""
     to = params.get("to", "").strip()
     message = params.get("message", "").strip()
 
@@ -59,7 +62,11 @@ def action_send(params):
     if not message:
         return {"status": "error", "error": "Missing 'message' parameter"}
 
-    code, body = _request("POST", "/send", {"to": to, "message": message})
+    payload = {"to": to, "message": message}
+    if caller:
+        payload["on_behalf_of"] = caller
+
+    code, body = _request("POST", "/send", payload)
 
     if code == 200:
         return {"status": "ok", "message": f"Sent to {to}", "detail": body}
@@ -75,9 +82,13 @@ def action_send(params):
         return {"status": "error", "error": body.get("error", f"HTTP {code}")}
 
 
-def action_inbox(params):
-    """GET /inbox — прочитать входящие сообщения."""
-    code, body = _request("GET", "/inbox")
+def action_inbox(params, caller):
+    """GET /inbox?for=<caller> — прочитать входящие сообщения caller'а."""
+    path = "/inbox"
+    if caller:
+        path = f"/inbox?for={caller}"
+
+    code, body = _request("GET", path)
 
     if code == 200:
         inbox = body.get("inbox", [])
@@ -89,9 +100,13 @@ def action_inbox(params):
         return {"status": "error", "error": body.get("error", f"HTTP {code}")}
 
 
-def action_clear(params):
-    """DELETE /inbox — очистить прочитанные."""
-    code, body = _request("DELETE", "/inbox")
+def action_clear(params, caller):
+    """DELETE /inbox?for=<caller> — очистить inbox caller'а."""
+    path = "/inbox"
+    if caller:
+        path = f"/inbox?for={caller}"
+
+    code, body = _request("DELETE", path)
 
     if code == 200:
         deleted = body.get("deleted", 0)
@@ -102,7 +117,7 @@ def action_clear(params):
         return {"status": "error", "error": body.get("error", f"HTTP {code}")}
 
 
-def action_list(params):
+def action_list(params, caller):
     """GET /health — показать доступные инстансы (без auth)."""
     code, body = _request("GET", "/health", auth=False)
 
@@ -148,7 +163,10 @@ def main():
         print(json.dumps({"status": "error", "error": "BROKER_KEY not configured"}))
         sys.exit(1)
 
-    result = handler(params)
+    # caller is passed by service-agent from the API request
+    caller = params.get("caller", "").strip().lower() or None
+
+    result = handler(params, caller)
     print(json.dumps(result, ensure_ascii=False))
 
 
