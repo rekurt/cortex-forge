@@ -68,26 +68,6 @@
     "native": "auto",
     "nativeSkills": "auto"
   },
-  "mcpServers": {
-    "dadata": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "supergateway",
-        "--streamableHttp",
-        "https://mcp.dadata.ru/mcp",
-        "--oauth2Bearer",
-        ":"
-      ]
-    },
-    "context-mode": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "context-mode"
-      ]
-    }
-  },
   "tools": {
     "media": {
       "audio": {
