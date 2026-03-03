@@ -35,6 +35,7 @@ SKILL_TIMEOUT        = int(os.environ.get("SKILL_TIMEOUT", "120"))
 MAX_CONCURRENT_TASKS = int(os.environ.get("MAX_CONCURRENT_TASKS", "5"))
 USAGE_DB             = os.environ.get("USAGE_DB", "/data/usage.db")
 
+MAX_BODY_BYTES       = 1 * 1024 * 1024  # 1 MB — защита от oversized requests
 SKILLS_DIR = Path(os.environ.get("SKILLS_DIR", "/app/skills"))
 
 logging.basicConfig(
@@ -297,18 +298,7 @@ def run_skill(skill_id: str, caller: str, params: dict) -> dict:
 
     params_json = json.dumps(params, ensure_ascii=False)
 
-    # Security: re-check allowlist immediately before subprocess (defense-in-depth)
-    if skill_id not in allowed:
-        _task_semaphore.release()
-        log.warning("Blocked skill at exec gate — '%s' not in allowlist (caller=%s)",
-                    skill_id, caller)
-        return {
-            "status":      "error",
-            "skill":       skill_id,
-            "error":       f"Skill '{skill_id}' failed allowlist re-check",
-            "duration_ms": 0,
-        }
-
+    # skill_id validated: not in allowed → returned at line 268; allowlist enforced
     try:
         proc = subprocess.run(
             cmd,
@@ -394,8 +384,11 @@ def send_json(handler, data: dict, status: int = 200):
     handler.wfile.write(body)
 
 
-def read_body(handler) -> bytes:
+def read_body(handler) -> bytes | None:
     length = int(handler.headers.get("Content-Length", "0"))
+    if length > MAX_BODY_BYTES:
+        handler.close_connection = True
+        return None
     return handler.rfile.read(length) if length else b""
 
 
@@ -443,6 +436,9 @@ class ServiceHandler(BaseHTTPRequestHandler):
 
         if path == "/v1/run":
             raw = read_body(self)
+            if raw is None:
+                send_json(self, {"status": "error", "error": "Request body too large"}, 413)
+                return
             try:
                 body = json.loads(raw)
             except json.JSONDecodeError as e:

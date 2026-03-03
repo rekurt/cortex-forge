@@ -67,7 +67,8 @@ DANGER_ZONE = """\
 2. quota-proxy хэширует ключ через SHA256
 3. Сравнивает с хэшами QUOTA_KEY_* из корневого .env (constant-time через hmac.compare_digest)
 4. Если совпал — определяет имя инстанса, проверяет лимит
-5. Подставляет РЕАЛЬНЫЙ sk-ant-xxx ключ и форвардит в api.anthropic.com
+5. Форвардит в upstream (по умолчанию CLIProxyAPI — OAuth-прокси для Claude Max;
+   admin ходит напрямую в api.anthropic.com если UPSTREAM_URL переопределён)
 6. Логирует расход токенов в SQLite
 ```
 

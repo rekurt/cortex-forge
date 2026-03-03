@@ -1,6 +1,39 @@
 services:
 
   # ════════════════════════════════════════════════════
+  # CLIProxyAPI — OAuth-прокси для Claude Max
+  # Позволяет использовать подписку Claude Max вместо API-ключа.
+  # quota-proxy форвардит запросы сюда вместо api.anthropic.com.
+  # ════════════════════════════════════════════════════
+  cliproxyapi:
+    image: eceasy/cli-proxy-api:latest
+    container_name: corp-cliproxyapi
+    restart: unless-stopped
+    volumes:
+      - ./cliproxyapi/config.yaml:/CLIProxyAPI/config.template.yaml:ro
+      - ./cliproxyapi/entrypoint.sh:/entrypoint.sh:ro
+      - cliproxyapi-auths:/root/.cli-proxy-api
+      - cliproxyapi-logs:/CLIProxyAPI/logs
+    environment:
+      - CLIPROXY_API_KEY=${CLIPROXY_API_KEY}
+    entrypoint: ["/bin/sh", "/entrypoint.sh"]
+    networks:
+      - corp-egress
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8317/v1/models"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ════════════════════════════════════════════════════
   # CortexForge Proxy — единственное место с реальным API-ключом
   # Hardened: нет проброса портов наружу, resource limits
   # ════════════════════════════════════════════════════
@@ -12,6 +45,8 @@ services:
     environment:
       - QUOTA_DB=/data/quota.db
       - QUOTA_PORT=9090
+      - UPSTREAM_URL=http://cliproxyapi:8317
+      - UPSTREAM_API_KEY=${CLIPROXY_API_KEY}
     volumes:
       - quota-data:/data
     ports:
@@ -37,6 +72,9 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+    depends_on:
+      cliproxyapi:
+        condition: service_healthy
 
   # ════════════════════════════════════════════════════
   # MESSAGE BROKER — шина сообщений (только corp-internal)
@@ -79,9 +117,9 @@ services:
     restart: unless-stopped
     env_file: instances/admin/.env
     volumes:
-      - ./instances/admin/workspace:/home/node/.openclaw/workspace
-      - ./instances/admin/openclaw.json:/home/node/.openclaw/openclaw.json
-      - ./shared/skills:/shared/skills
+      - ./instances/admin/openclaw_data:/home/node/.openclaw
+      - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data
       - ./instances/admin/workspace:/home/node/.openclaw/workspace
@@ -252,13 +290,14 @@ services:
     volumes:
       - ./instances/user-1/openclaw_data:/home/node/.openclaw
       - ../user-1-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_USER_1}
+      - NODE_OPTIONS=--max-old-space-size=768
     networks:
       - corp-internal
       - corp-outbound
@@ -286,9 +325,9 @@ services:
     volumes:
       - ./instances/user-4/openclaw_data:/home/node/.openclaw
       - ../user-4-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_4}
       - BROKER_URL=http://message-broker:8080
@@ -321,9 +360,9 @@ services:
     volumes:
       - ./instances/user-3/openclaw_data:/home/node/.openclaw
       - ../user-3-workspace:/home/node/.openclaw/workspace
-      - ./shared/skills:/shared/skills
+      - ./shared/skills:/shared/skills:ro
       - ./shared/docs:/shared/docs
-      - ./shared/compliance-data:/shared/compliance-data
+      - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${QUOTA_KEY_USER_3}
       - BROKER_URL=http://message-broker:8080
@@ -355,6 +394,10 @@ volumes:
   monitor-data:
     driver: local
   service-data:
+    driver: local
+  cliproxyapi-auths:
+    driver: local
+  cliproxyapi-logs:
     driver: local
 
 networks:
