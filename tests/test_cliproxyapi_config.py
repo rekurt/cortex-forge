@@ -126,7 +126,16 @@ class TestDockerComposeCliproxyapi(unittest.TestCase):
             "cliproxyapi should NOT have ports section")
 
     def test_cliproxyapi_config_volume(self):
-        self.assertIn("cliproxyapi/config.yaml:/CLIProxyAPI/config.yaml", self.compose)
+        self.assertIn(
+            "cliproxyapi/config.yaml:/CLIProxyAPI/config.template.yaml:ro",
+            self.compose,
+            "config.yaml must be mounted as template (CLIProxyAPI yaml.v3 does not expand env vars)")
+
+    def test_cliproxyapi_entrypoint_volume(self):
+        self.assertIn(
+            "cliproxyapi/entrypoint.sh:/entrypoint.sh:ro",
+            self.compose,
+            "entrypoint.sh must be mounted to expand env vars before app start")
 
     def test_cliproxyapi_security_opt(self):
         """cliproxyapi must have no-new-privileges security option."""
