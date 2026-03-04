@@ -25,3 +25,6 @@
 [submodule "shared/skills/dep-audit"]
 	path = shared/skills/dep-audit
 	url = https://github.com/rekurt/dep-audit.git
+[submodule "shared/skills/sast-priority"]
+	path = shared/skills/sast-priority
+	url = https://github.com/rekurt/sast-priority.git
