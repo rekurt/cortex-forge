@@ -19,10 +19,21 @@
 - Деструктивные действия — только с явным подтверждением.
 - При сомнениях — спросить.
 
-## Общие скиллы
+## Shared-скиллы
 
-Корпоративные скиллы доступны в `/shared/skills/`.
-Читай их `SKILL.md` перед использованием.
+Корпоративные скиллы доступны в `/shared/skills/`. Читай `SKILL.md` перед использованием.
+
+| Скилл | Путь | Когда использовать |
+|-------|------|-------------------|
+| `corp-greeting` | `/shared/skills/corp-greeting/` | Приветствие при старте сессии — каждый раз новое |
+| `corp-messenger` | `/shared/skills/corp-messenger/` | Написать другому корпоративному боту / прочитать входящие |
+| `corp-humor` | `/shared/skills/corp-humor/` | Лёгкая ирония — органично, не в каждом сообщении |
+| `compliance-risk` | `/shared/skills/compliance-risk/` | Проверка контрагента по ИНН, санкционный скрининг |
+| `corp-docs` | `/shared/skills/corp-docs/` | Корпоративная база знаний — поиск и сохранение документов |
+| `gitlab-release-monitor` | `/shared/skills/gitlab-release-monitor/` | Мониторинг новых тегов/релизов в GitLab — уведомления в Telegram |
+| `doc-translator` | `/shared/skills/doc-translator/` | Переписать документ для другой аудитории (юристы, бизнес, разработчики) |
+| `qmd` | `/shared/skills/qmd/` | Полнотекстовый поиск по .md файлам (workspace, docs, skills) |
+| `yandex-oauth` | `/shared/skills/yandex-oauth/` | Яндекс-инфраструктура: Трекер, Телемост, Календарь, Почта |
 
 ## Инструменты
 
