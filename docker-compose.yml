@@ -127,7 +127,7 @@ services:
       # Весь проект (rw) — admin уже имеет ANTHROPIC_API_KEY через environment
       - ./:/infra/
       - ../:/infra-parent/    # доступ к внешним данным
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # статус контейнеров (read-only)
+      - /var/run/docker.sock:/var/run/docker.sock:rw  # статус контейнеров (read-only)
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
       - BROKER_URL=http://message-broker:8080
@@ -143,6 +143,8 @@ services:
       - corp-internal
       - corp-admin
       - corp-outbound
+    group_add:
+      - "988"  # docker group
     security_opt:
       - no-new-privileges:true
     deploy:
