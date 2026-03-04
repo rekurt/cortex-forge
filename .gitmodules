@@ -7,3 +7,21 @@
 [submodule "shared/skills/gitlab-release-monitor"]
 	path = shared/skills/gitlab-release-monitor
 	url = https://github.com/rekurt/gitlab-release-monitor.git
+[submodule "shared/skills/standup-digest"]
+	path = shared/skills/standup-digest
+	url = https://github.com/rekurt/standup-digest.git
+[submodule "shared/skills/news-digest"]
+	path = shared/skills/news-digest
+	url = https://github.com/rekurt/news-digest.git
+[submodule "shared/skills/morning-briefing"]
+	path = shared/skills/morning-briefing
+	url = https://github.com/rekurt/morning-briefing.git
+[submodule "shared/skills/gitlab-changelog"]
+	path = shared/skills/gitlab-changelog
+	url = https://github.com/rekurt/gitlab-changelog.git
+[submodule "shared/skills/release-notes"]
+	path = shared/skills/release-notes
+	url = https://github.com/rekurt/release-notes.git
+[submodule "shared/skills/dep-audit"]
+	path = shared/skills/dep-audit
+	url = https://github.com/rekurt/dep-audit.git
