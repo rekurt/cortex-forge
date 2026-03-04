@@ -271,13 +271,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def _json(self, code: int, body):
         data = json.dumps(body, ensure_ascii=False, indent=2).encode()
-        self.send_response(code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", len(data))
-        for k, v in _SEC_HEADERS.items():
-            self.send_header(k, v)
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", len(data))
+            for k, v in _SEC_HEADERS.items():
+                self.send_header(k, v)
+            self.end_headers()
+            self.wfile.write(data)
+        except BrokenPipeError:
+            pass
 
     # Constant-time сравнение — нет timing-атаки
     def _is_admin(self) -> bool:
