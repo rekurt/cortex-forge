@@ -1,3 +1,6 @@
 [submodule "shared/skills/compliance-risk"]
 	path = shared/skills/compliance-risk
 	url = https://github.com/rekurt/compliance-risk.git
+[submodule "instances/admin/workspace/skills/ssh"]
+	path = instances/admin/workspace/skills/ssh
+	url = https://github.com/rekurt/cortexforge-ssh.git
