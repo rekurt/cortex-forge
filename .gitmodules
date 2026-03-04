@@ -4,3 +4,6 @@
 [submodule "instances/admin/workspace/skills/ssh"]
 	path = instances/admin/workspace/skills/ssh
 	url = https://github.com/rekurt/cortexforge-ssh.git
+[submodule "shared/skills/gitlab-release-monitor"]
+	path = shared/skills/gitlab-release-monitor
+	url = https://github.com/rekurt/gitlab-release-monitor.git
