@@ -1,3 +1,4 @@
+.idea
 # Пользовательские инстансы — генерируются локально, не конфликтуют с git pull
 docker-compose.override.yml
 
