@@ -5,6 +5,28 @@ All notable changes to CortexForge will be documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org/).
 Releases are automated via [release-please](https://github.com/googleapis/release-please).
 
+## [0.5.0](https://github.com/example-org/cortex-forge/compare/v0.4.0...v0.5.0) (2026-03-19)
+
+
+### Features
+
+* add 6 shared skills as submodules ([1238aaa](https://github.com/example-org/cortex-forge/commit/1238aaa684a84fcd5694f569a9b58f2d928b105b))
+* add gitlab-release-monitor as shared skill, update ONBOARDING.md ([6fee05c](https://github.com/example-org/cortex-forge/commit/6fee05c475f31f22c62aaaf386f6bc851482cd4f))
+* add gitlab-release-monitor to skills table in all AGENTS.md + template ([e176aba](https://github.com/example-org/cortex-forge/commit/e176aba034a96722e6e9e0fae922529fbe632e78))
+* add user-5 instance, update user-1 USER.md, add compliance-risk skill to user-1 ([149d9f5](https://github.com/example-org/cortex-forge/commit/149d9f5d5d89c202176b7bc985d85c6426a2583e))
+* add new documentation files for agent infrastructure and update identity details ([0f6c77d](https://github.com/example-org/cortex-forge/commit/0f6c77decdd2060309635bce47acea77bff04557))
+* add sast-priority as shared skill submodule ([baa3d0d](https://github.com/example-org/cortex-forge/commit/baa3d0d862d0f6145dff90ab9b978df7d1b7c53d))
+* **admin:** expose docker socket rw + docker group ([289be2d](https://github.com/example-org/cortex-forge/commit/289be2d2830975703db2f94dec49c6adb15886f6))
+* **admin:** mount docker CLI binary from host ([438c3a8](https://github.com/example-org/cortex-forge/commit/438c3a878d118acc3f0500a1f9635b3039555fe7))
+* enhance OAuth credential handling and update documentation ([7ca0290](https://github.com/example-org/cortex-forge/commit/7ca0290d2be97b01fe43c167b5c8797926c2fb6b))
+* migration 024 — add 7 new shared skills to AGENTS.md ([b1f7ecc](https://github.com/example-org/cortex-forge/commit/b1f7ecc730d0478142797855b29709949e5cb8a9))
+* update workspace paths to be within instance directories ([198150a](https://github.com/example-org/cortex-forge/commit/198150ae3eaa2dc8de97c29464b7ffa195fd4224))
+
+
+### Bug Fixes
+
+* **ci:** fix commitlintrc trailing comma and trivy db mirror ([8ef81fe](https://github.com/example-org/cortex-forge/commit/8ef81fe9011e9a638267b2520858b987137d9895))
+
 ## [0.4.0](https://github.com/example-org/cortex-forge/compare/v0.3.0...v0.4.0) (2026-03-03)
 
 
