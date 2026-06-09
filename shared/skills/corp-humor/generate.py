@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Генератор приматных шуток для corp-humor.
-Запускается Adminом еженедельно через системный крон.
+Запускается Admin еженедельно через системный крон.
 Использует OpenAI API для генерации 20 новых острот.
 """
 import json, datetime, pathlib, urllib.request, os

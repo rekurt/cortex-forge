@@ -7,7 +7,7 @@ OLD = ("| `corp-greeting` | `/shared/skills/corp-greeting/SKILL.md` "
        "| Приветствие при старте сессии — каждый раз новое |")
 NEW = (OLD + "\n"
        "| `corp-humor` | `/shared/skills/corp-humor/SKILL.md` "
-       "| Пул приматных шуток от Adminа — использовать органично, между делом |")
+       "| Пул приматных шуток от Admin — использовать органично, между делом |")
 
 def apply(workspace: pathlib.Path):
     p = workspace / "AGENTS.md"

@@ -33,7 +33,7 @@
 |---------|-----|------|-------------|
 | corp-admin (Admin) | @example_admin_bot | 18789 | Пользователь 1 (admin) |
 | corp-user-1 | @example_user1_bot | 18790 | Пользователь 1 |
-| corp-user-3 | @user-3_slave_bot | 18791 | Пользователь 3 |
+| corp-user-3 | @example_user3_bot | 18791 | Пользователь 3 |
 
 ---
 
@@ -48,7 +48,7 @@
 - Доступ к общим скиллам: `/shared/skills/` (только чтение!)
 - Доступ к брокеру сообщений (только свой inbox)
 
-**Чего НЕТ у пользовательских инстансов (только у Adminа):**
+**Чего НЕТ у пользовательских инстансов (только у Admin):**
 - `/infra/` — весь проект недоступен
 - `docker.sock` — нельзя управлять контейнерами
 - `corp-admin` сеть — нельзя звать quota-proxy с admin-токеном
@@ -86,7 +86,7 @@
 > ⚠️ Если изменил SOUL.md инстанса и бот "не замечает" — значит старая личность
 > закомпактилась в JSONL. Решение: удалить *.jsonl + sessions.json, перезапустить контейнер.
 
-### Инфраструктура (только у Adminа, через /infra)
+### Инфраструктура (только у Admin, через /infra)
 ```
 /infra/
   docker-compose.yml        ← главный compose
@@ -303,7 +303,7 @@ docker logs corp-user-1 -f --tail=50                # логи инстанса
 curl -s -X POST "http://message-broker:8080/send" \
   -H "Authorization: Bearer $BROKER_KEY" \
   -H "Content-Type: application/json" \
-  -d '{"to":"user-1","message":"Сообщение от Adminа"}'
+  -d '{"to":"user-1","message":"Сообщение от Admin"}'
 
 # Прочитать свой inbox (или inbox любого — admin привилегия)
 curl -s "http://message-broker:8080/inbox" \

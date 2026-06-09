@@ -179,7 +179,7 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 
 ### Personal skills
 
-Каждый инстанс может иметь личные скиллы в `workspace/skills/`. Adminитет: personal skills > shared skills. Документация: `shared/docs/common/SKILLS.md`.
+Каждый инстанс может иметь личные скиллы в `workspace/skills/`. Приоритет: personal skills > shared skills. Документация: `shared/docs/common/SKILLS.md`.
 
 ### Network isolation
 

@@ -257,8 +257,8 @@ class TestAdminDashboard(unittest.TestCase):
         result = self._run_skill({"action": "overview"})
         usage = result["quota"]["usage"]
         self.assertEqual(len(usage), 2)
-        user-1 = next(u for u in usage if u["instance"] == "user-1")
-        self.assertEqual(user-1["total_tokens"], 80000)
+        user_1 = next(u for u in usage if u["instance"] == "user-1")
+        self.assertEqual(user_1["total_tokens"], 80000)
 
     # ── action: instances ─────────────────────────────────────────────────
 
@@ -271,21 +271,21 @@ class TestAdminDashboard(unittest.TestCase):
 
     def test_instances_has_usage(self):
         result = self._run_skill({"action": "instances"})
-        user-1 = result["instances"]["user-1"]
-        self.assertIn("usage", user-1)
-        self.assertEqual(user-1["usage"]["total_tokens"], 80000)
+        user_1 = result["instances"]["user-1"]
+        self.assertIn("usage", user_1)
+        self.assertEqual(user_1["usage"]["total_tokens"], 80000)
 
     def test_instances_has_broker(self):
         result = self._run_skill({"action": "instances"})
-        user-1 = result["instances"]["user-1"]
-        self.assertTrue(user-1.get("broker_registered"))
-        self.assertEqual(user-1.get("pending_messages"), 2)
+        user_1 = result["instances"]["user-1"]
+        self.assertTrue(user_1.get("broker_registered"))
+        self.assertEqual(user_1.get("pending_messages"), 2)
 
     def test_instances_has_container_metrics(self):
         result = self._run_skill({"action": "instances"})
-        user-1 = result["instances"]["user-1"]
-        self.assertIn("container", user-1)
-        self.assertEqual(user-1["container"]["cpu_pct"], 12.5)
+        user_1 = result["instances"]["user-1"]
+        self.assertIn("container", user_1)
+        self.assertEqual(user_1["container"]["cpu_pct"], 12.5)
 
     # ── action: set-limit ─────────────────────────────────────────────────
 

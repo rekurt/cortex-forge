@@ -70,7 +70,7 @@ Releases are automated via [release-please](https://github.com/googleapis/releas
 * context-mode MCP в шаблон ([f66f335](https://github.com/example-org/cortex-forge/commit/f66f335cc0fe5bdedc9ef69d315935e8fc9f8e2c))
 * mount admin-workspace from capuchin repo ([61c2f7f](https://github.com/example-org/cortex-forge/commit/61c2f7f35563e7daaf988650e14aed6cde7154a5))
 * workspace mount из репо для всех инстансов; обновлён add-user.sh ([8b522d0](https://github.com/example-org/cortex-forge/commit/8b522d04b122b10f520c684c88f9d8035f2139b0))
-* актуализация шаблона — models.providers, убрать skills/OPENAI_API_KEY, добавить HEARTBEAT, allowFrom Adminа ([1cce655](https://github.com/example-org/cortex-forge/commit/1cce655b738613e68f14311913eb7fb49da3a297))
+* актуализация шаблона — models.providers, убрать skills/OPENAI_API_KEY, добавить HEARTBEAT, allowFrom Admin ([1cce655](https://github.com/example-org/cortex-forge/commit/1cce655b738613e68f14311913eb7fb49da3a297))
 
 
 ### Bug Fixes

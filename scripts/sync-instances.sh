@@ -23,7 +23,7 @@ HEARTBEAT_REF="$INSTANCES/_template/workspace/HEARTBEAT.md"
 for INST_DIR in "$INSTANCES"/*/; do
     NAME=$(basename "$INST_DIR")
     [ "$NAME" = "_template" ] && continue
-    [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Adminа свой HEARTBEAT
+    [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Admin свой HEARTBEAT
 
     WS="$WORKSPACE_PARENT/${NAME}-workspace"
     [ -d "$WS" ] || continue

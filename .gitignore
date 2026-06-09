@@ -4,6 +4,9 @@ docker-compose.override.yml
 
 # Секреты — никогда в git
 .env
+.anthropic_tokens.json
+.cli-proxy-api/
+Codex-*.json
 instances/*/.env
 instances/*/openclaw.json
 !instances/admin/openclaw.json
@@ -11,6 +14,8 @@ instances/*/openclaw_data/
 **/*.env
 **/*.key
 **/*.token
+**/*.db
+**/*.sqlite
 
 # Python
 **/__pycache__/

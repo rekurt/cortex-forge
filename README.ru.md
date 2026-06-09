@@ -173,8 +173,8 @@ nano instances/admin/.env
 Обязательные поля:
 
 ```bash
-TELEGRAM_BOT_TOKEN=7000000000:AAxxxx  # токен бота Adminа (от @BotFather)
-TELEGRAM_ALLOW_FROM=123456789         # ваш Telegram ID (от @userinfobot)
+TELEGRAM_BOT_TOKEN=0000000000:CHANGE_ME_BOT_TOKEN
+TELEGRAM_ALLOW_FROM=000000000         # Telegram user ID
 BROKER_KEY=<то же что BROKER_KEY_ADMIN> # должно совпадать с глобальным .env
 ```
 
@@ -238,7 +238,7 @@ make status    # все контейнеры должны быть Up (healthy)
 
 | Переменная | Обязательно | Описание |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | ✅ | Токен Telegram-бота (от @BotFather) |
+| `TELEGRAM_BOT_TOKEN` | ✅ | Placeholder токена Telegram-бота |
 | `TELEGRAM_ALLOW_FROM` | ✅ | Разрешённые Telegram ID через запятую |
 | `BROKER_KEY` | ✅ | Ключ брокера (генерируется `add-user.sh`) |
 | `YANDEX_OAUTH_TOKEN` | — | Яндекс OAuth для почты / Трекера |

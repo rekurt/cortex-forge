@@ -137,6 +137,25 @@ TOKEN_PATTERNS = [
 ]
 
 EXCLUDE_PATTERNS = re.compile(r'(#|test|example|placeholder|change.me|xxx|\.md$|\.example$)')
+TEXT_SECRET_SUFFIXES = {
+    ".env", ".example", ".json", ".md", ".py", ".sh", ".txt", ".yaml", ".yml",
+    ".toml", ".template", ".lock",
+}
+SENSITIVE_FILENAMES = {
+    ".anthropic_tokens.json",
+    "anthropic-oauth.json",
+}
+
+def looks_text(path: pathlib.Path) -> bool:
+    if path.suffix in TEXT_SECRET_SUFFIXES:
+        return True
+    if path.name in {"Makefile", "Dockerfile", "CODEOWNERS", "LICENSE", "CHANGELOG"}:
+        return True
+    return False
+
+def should_skip_secret_path(path: pathlib.Path) -> bool:
+    skip_parts = {".git", ".venv", "__pycache__", "node_modules", "openclaw_data", ".openclaw"}
+    return bool(skip_parts.intersection(path.parts))
 
 def check_hardcoded_tokens():
     for py_file in ROOT.rglob("*.py"):
@@ -164,6 +183,46 @@ def check_hardcoded_tokens():
                      sh_file, no,
                      f"Возможный захардкоженный {token_type} в bash-скрипте",
                      "Перенеси в .env")
+
+def check_sensitive_token_files():
+    oauth_field = re.compile(
+        r'(?i)"(?:accessToken|refreshToken|access_token|refresh_token)"\s*:\s*"[^"$<\s][^"]{20,}"'
+    )
+
+    for path in ROOT.rglob("*"):
+        if not path.is_file() or should_skip_secret_path(path):
+            continue
+
+        if path.name in SENSITIVE_FILENAMES:
+            find("CRITICAL", "sensitive-token-file",
+                 path, 1,
+                 f"Чувствительный token-файл `{path.name}` не должен попадать в репозиторий",
+                 "Удали файл из git, добавь ignore-правило и ротируй токены")
+            continue
+
+        if not looks_text(path):
+            continue
+
+        src = read(path)
+        if not src:
+            continue
+
+        for pattern, token_type in TOKEN_PATTERNS:
+            for no, line in grep(pattern, src):
+                if EXCLUDE_PATTERNS.search(line):
+                    continue
+                find("CRITICAL", "hardcoded-token-any-text",
+                     path, no,
+                     f"Возможный захардкоженный {token_type}",
+                     "Перенеси в gitignored .env или секрет-хранилище")
+
+        for no, line in grep(oauth_field.pattern, src):
+            if EXCLUDE_PATTERNS.search(line):
+                continue
+            find("CRITICAL", "oauth-token-json",
+                 path, no,
+                 "Возможный OAuth access/refresh token в текстовом файле",
+                 "Удали файл из git, добавь ignore-правило и ротируй токены")
 
 # ─── Check 6: Docker — сервисы на правильных сетях ───────────────────────────
 
@@ -238,6 +297,7 @@ def run_all():
     check_mcp_auth()
     check_service_agent_skill_validation()
     check_hardcoded_tokens()
+    check_sensitive_token_files()
     check_docker_networks()
     check_add_user_validation()
     check_env_example()

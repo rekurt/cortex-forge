@@ -131,7 +131,7 @@ Commits that don't follow this convention will be rejected by CI.
 2. **Update documentation** if behaviour changes.
 3. **Pass all CI checks** — the PR cannot be merged with red security checks.
 4. **Fill in the PR template** completely.
-5. **Request review** from [@example-maintainer](https://github.com/user-1).
+5. **Request review** from `@example-maintainer`.
 
 PRs are merged via **squash merge** to keep `master` history clean.
 
