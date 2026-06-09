@@ -1,60 +1,82 @@
-# 🐒 CortexForge
+# 🐒 CortexForge — toy project, not production-safe
 
 <p align="center">
   <img src="assets/banner.jpg" alt="CortexForge — isolated AI personas for every team member" width="1200"/>
 </p>
 
+> **Experimental / entertainment project. Do not use in production.**
+> CortexForge is a Docker Compose playground for trying isolated AI assistant instances, quota proxies, message routing, and personal personas. It is **not audited**, **not hardened enough for real employee data**, and includes intentionally powerful local-admin capabilities such as Docker socket access and project write mounts. Treat it as a lab, not an enterprise security product.
+>
 > **Language / Язык:** English | [Русский](README.ru.md)
 
-[![Version](https://img.shields.io/github/v/tag/user-1/cortex-forge?label=version&color=blue)](https://github.com/example-org/cortex-forge/releases)
+[![Version](https://img.shields.io/github/v/tag/example-org/cortex-forge?label=version&color=blue)](https://github.com/example-org/cortex-forge/releases)
 [![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Corporate AI assistant infrastructure built on [OpenClaw](https://github.com/openclaw/openclaw).
+CortexForge is an experimental AI-assistant infrastructure sandbox built on [OpenClaw](https://github.com/openclaw/openclaw).
 
-Each employee gets an **isolated persona**: their own Telegram bot, their own memory, their own character.  
-One server. Zero data leakage between users. Full token cost control.
+The idea is simple: run several isolated Telegram-bot assistant instances on one host, each with its own workspace, persona, token quota, and message inbox.
 
 ---
 
-## Product Line
+## What This Project Is
 
-CortexForge ships as a suite of focused components — deploy all or just what you need:
+This repository is useful for:
+
+- experimenting with per-user AI assistant containers
+- testing quota enforcement in front of model APIs
+- trying a simple broker for inter-assistant messages
+- exploring persona/workspace-based assistant behavior
+- prototyping internal automation skills behind a small HTTP service
+
+This repository is **not** suitable for:
+
+- production employee assistants
+- regulated data, secrets, customer data, or confidential documents
+- multi-tenant deployments with real trust boundaries
+- environments where Docker socket access, broad bind mounts, or OAuth proxy experiments are unacceptable
+
+---
+
+## Components
+
+CortexForge is split into a few small services:
 
 | Component | Description |
 |---|---|
-| 🧠 **CortexForge Core** | Main runtime — isolated AI persona instances, one per employee |
-| 🔐 **CortexForge Proxy** | Token quota enforcement — the only container that holds the real API key |
-| 🏛️ **CortexForge Admin** | Admin instance — infrastructure control, quota management, Docker access |
-| 📨 **CortexForge Broker** | Message bus — enables assistants to send messages to each other |
+| **OpenClaw instances** | One admin instance plus optional generated user instances |
+| **CLIProxyAPI** | Optional OAuth proxy for Codex/Claude Max style access; stores its own OAuth session in a Docker volume |
+| **quota-proxy** | Quota, rate-limit and audit proxy in front of the upstream model endpoint |
+| **message-broker** | SQLite-backed inbox/message bus between instances |
+| **resource-monitor** | Docker/container metrics and quota alerts |
+| **service-agent** | Local HTTP API that runs approved skills as subprocesses |
 
 ---
 
-## Why CortexForge?
+## Why It Exists
 
-Most teams share a single AI tool — meaning everyone sees the same context, there are no personal settings, and there is no way to track who is spending what. CortexForge solves this:
+The project started as a playful way to see what an "AI office full of little personal bots" could look like. It focuses on operational mechanics rather than polished product security:
 
-| Problem | Solution |
+| Experiment | Implementation |
 |---|---|
-| Shared API key, no cost tracking | Per-instance token quotas in SQLite, real-time report |
-| All employees in the same context | Complete isolation — each instance has its own memory and personality |
-| One-size-fits-all assistant | Each employee gets a custom persona (name, style, skills) |
-| API key leaks via prompts | Key is only in `quota-proxy`; instances never see it |
-| No audit trail | Full audit log for every API call, quota change, admin action |
-| Hard to onboard / offboard | `make add-user` / `make remove-user` — one command each |
+| Per-instance context | Separate workspace, memory, Telegram token, and persona files |
+| Quota accounting | `quota-proxy` stores monthly counters in SQLite |
+| Admin control plane | Admin OpenClaw instance mounts the repo as `/infra` and can inspect Docker |
+| Bot-to-bot messaging | `message-broker` exposes `/send`, `/inbox`, and admin inbox views |
+| Skill execution | `service-agent` loads skill manifests and runs allowlisted subprocesses |
 
 ---
 
 ## Features
 
-- 🔒 **CortexForge Proxy** — `ANTHROPIC_API_KEY` lives only here; instances get a `QUOTA_KEY` with zero direct API access
+- 🔒 **Quota proxy pattern** — user instances receive `QUOTA_KEY_*` values and call the local `quota-proxy`
 - 📊 **Token quotas** — per-instance monthly limits with warning (80%) and hard cutoff (100%); change live without restart
-- 🧑‍🤝‍🧑 **Isolated personas** — each employee has their own bot, workspace, memory and character (`SOUL.md`)
-- 💬 **CortexForge Broker** — message bus enabling inter-instance communication
-- 🏛️ **CortexForge Admin** — dedicated admin instance with full infrastructure access, quota management and Docker control
+- 🧑‍🤝‍🧑 **Isolated personas** — each generated instance has its own bot, workspace, memory and character (`SOUL.md`)
+- 💬 **Message broker** — inter-instance messages with per-instance inboxes
+- 🏛️ **Admin instance** — intentionally powerful admin bot with `/infra` and Docker access
 - 📈 **Resource monitor** — CPU/RAM/disk metrics with configurable alert thresholds
 - 🔌 **Service agent** — HTTP API that lets backend services call skills (e.g. compliance checks) as subprocesses
-- 🛡️ **Security pipeline** — Semgrep, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck on every commit
+- 🛡️ **Security checks** — Gitleaks, Semgrep, Bandit, Trivy, Hadolint, ShellCheck and custom AI checks in CI
 - 🔄 **Release automation** — release-please auto-generates changelogs and GitHub Releases on merge to `master`
 - 🐳 **Pure Docker Compose** — no Kubernetes, no Helm; runs on a single Ubuntu VPS
 
@@ -72,7 +94,7 @@ Most teams share a single AI tool — meaning everyone sees the same context, th
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
 │       │             │             │                              │
 │       └─────────────┼─────────────┘                              │
-│                     │  ANTHROPIC_BASE_URL=http://quota-proxy     │
+│                     │  openclaw.json baseUrl=http://quota-proxy  │
 │            ┌────────▼─────────┐                                  │
 │            │  CortexForge     │  corp-internal                   │
 │            │  Proxy :9090     │  corp-admin                      │
@@ -82,7 +104,7 @@ Most teams share a single AI tool — meaning everyone sees the same context, th
 │            │  ✓ audit log     │                                  │
 │            └────────┬─────────┘                                  │
 │                     │                                            │
-│                     ▼  api.anthropic.com                         │
+│                     ▼  CLIProxyAPI or api.anthropic.com          │
 │                                                                  │
 │  ┌───────────────────────┐   ┌──────────────────────────────┐   │
 │  │  CortexForge Broker   │   │  resource-monitor :9091      │   │
@@ -101,20 +123,21 @@ Most teams share a single AI tool — meaning everyone sees the same context, th
 ### How a request flows
 
 1. Employee sends a message to their Telegram bot
-2. OpenClaw inside the container receives it and calls Anthropic API — but `ANTHROPIC_BASE_URL` points to `quota-proxy`, not Anthropic directly
-3. `quota-proxy` checks the token quota, updates the counter in SQLite, then forwards the request to `api.anthropic.com` via the `corp-egress` network
+2. OpenClaw inside the container receives it and calls the provider configured in `openclaw.json`; user templates point `baseUrl` to `http://quota-proxy:9090`
+3. `quota-proxy` checks the token quota, updates the counter in SQLite, then forwards the request to CLIProxyAPI by default (`http://cliproxyapi:8317`) or to a direct upstream if configured
 4. If the quota is exceeded, `quota-proxy` returns HTTP 429 immediately — no real API call is made
 
 ### Docker Networks
 
 | Network | `internal` | Connected to | Purpose |
 |---|---|---|---|
-| `corp-internal` | ✅ yes | all instances, broker, quota-proxy, monitor | main data bus — no direct internet |
-| `corp-admin` | ✅ yes | admin, quota-proxy, monitor | quota management & metrics — no direct internet |
-| `corp-egress` | ❌ no | quota-proxy **only** | sole path to `api.anthropic.com` |
+| `corp-internal` | ✅ yes | admin, generated instances, broker, quota-proxy, monitor, service-agent | internal data bus — no direct internet |
+| `corp-admin` | ✅ yes | admin, quota-proxy, monitor | quota management and metrics — no direct internet |
+| `corp-egress` | ❌ no | quota-proxy, CLIProxyAPI | upstream model/OAuth egress |
 | `corp-services` | ❌ no | service-agent | backend service calls |
+| `corp-outbound` | ❌ no | admin and generated instances | Telegram and other non-model external APIs |
 
-Instances sit on `corp-internal` only — they cannot reach the internet directly, cannot reach `corp-admin`, and cannot see `service-agent`. `quota-proxy` is the only container that bridges the internal networks and the internet.
+Generated user instances are not placed on `corp-admin` and do not mount `/infra`. They do have `corp-outbound` for Telegram and other external calls, so this is **not** a strict air-gapped or production-grade isolation model.
 
 ---
 
@@ -128,12 +151,14 @@ Instances sit on `corp-internal` only — they cannot reach the internet directl
 | Disk | 20 GB | 50+ GB |
 | Docker | 24+ | latest |
 | Docker Compose | 2.x | latest |
+| Python | 3.12+ | 3.12+ |
+| ShellCheck | optional locally | required for full local lint |
 
 ---
 
 ## Quick Start
 
-### 1. Clone and configure global secrets
+### 1. Clone and configure local secrets
 
 ```bash
 git clone https://github.com/example-org/cortex-forge.git /opt/CortexForge
@@ -144,22 +169,40 @@ chmod 600 .env
 nano .env
 ```
 
-The only required fields to get started:
+Minimum local values:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...          # your Anthropic key
-QUOTA_ADMIN_TOKEN=<random-32-chars>   # admin API token for quota-proxy
+ANTHROPIC_API_KEY=sk-ant-...          # used by the admin instance directly
+CLIPROXY_API_KEY=clip-...             # quota-proxy -> CLIProxyAPI auth
+QUOTA_ADMIN_TOKEN=<random-32-chars>   # quota-proxy admin API token
 BROKER_KEY_ADMIN=<random-32-chars>    # admin broker key
-MONITOR_ADMIN_TOKEN=<random-32-chars> # resource monitor API token
-SERVICE_API_KEY=<random-32-chars>     # service-agent bearer token
+BROKER_KEY_SERVICE=<random-32-chars>  # service-agent broker key
+BROKER_KEY_MONITOR=<random-32-chars>  # monitor broker key
+MONITOR_ADMIN_TOKEN=<random-32-chars> # resource-monitor API token
+SERVICE_API_KEY=svc-...               # service-agent bearer token
 ```
 
 Generate random tokens:
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+python3 -c "import secrets; print('clip-' + secrets.token_urlsafe(24))"
+python3 -c "import secrets; print('svc-' + secrets.token_urlsafe(24))"
 ```
 
-### 2. Create the admin instance (Admin)
+### 2. Bootstrap CLIProxyAPI OAuth, or change upstream mode
+
+`docker-compose.yml` currently points `quota-proxy` at CLIProxyAPI:
+
+```yaml
+UPSTREAM_URL=http://cliproxyapi:8317
+UPSTREAM_API_KEY=${CLIPROXY_API_KEY}
+```
+
+That means CLIProxyAPI needs an OAuth credential stored in the `cliproxyapi-auths` Docker volume before normal user instances can call models through the proxy. The full headless login procedure is documented in [CLAUDE.md](CLAUDE.md). Without that OAuth state, the CLIProxyAPI container can restart cleanly but still be unusable for real model calls.
+
+For a simpler local experiment, change `UPSTREAM_URL` to a direct provider endpoint and provide a compatible upstream key. Do not commit real credentials.
+
+### 3. Create the admin instance (Admin)
 
 The admin instance is **mandatory** — `docker-compose.yml` references `instances/admin/.env` at startup. Without it, `docker compose config` will fail.
 
@@ -178,7 +221,7 @@ TELEGRAM_ALLOW_FROM=000000000         # your Telegram user ID
 BROKER_KEY=<same as BROKER_KEY_ADMIN> # must match the global .env value
 ```
 
-### 3. Validate configuration
+### 4. Validate configuration
 
 ```bash
 make security-check
@@ -186,7 +229,7 @@ make security-check
 
 All items should show ✅. Fix any ❌ before proceeding.
 
-### 4. Add the first employee
+### 5. Add the first generated instance
 
 ```bash
 make add-user NAME=user-2 \
@@ -199,7 +242,7 @@ This script automatically:
 - Creates `instances/user-2/` from the template
 - Generates unique `BROKER_KEY` and `QUOTA_KEY`
 - Appends keys and a 1M token/month limit to `.env`
-- Prints the YAML block to add to `docker-compose.yml`
+- Appends the generated service to `docker-compose.override.yml` (gitignored)
 
 Then optionally fill in personal credentials:
 ```bash
@@ -207,7 +250,7 @@ nano instances/user-2/.env               # Yandex OAuth, GitLab token, etc.
 nano instances/user-2/workspace/SOUL.md  # persona style and character
 ```
 
-### 5. Launch
+### 6. Launch
 
 ```bash
 make deploy
@@ -222,7 +265,7 @@ make status    # all containers should be Up (healthy)
 
 | Variable | Required | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ✅ | Anthropic API key — only read by `quota-proxy` |
+| `ANTHROPIC_API_KEY` | ✅ | Anthropic API key used by the admin instance directly; generated instances should use quota keys through `quota-proxy` |
 | `QUOTA_ADMIN_TOKEN` | ✅ | Bearer token for quota management API |
 | `QUOTA_DEFAULT_MONTHLY` | — | Default token limit per month (default: `1000000`) |
 | `BROKER_KEY_ADMIN` | ✅ | Admin broker key |
@@ -297,7 +340,7 @@ make status    # all containers should be Up (healthy)
 
 ## Token Quotas
 
-Quotas are enforced by `quota-proxy` before any request reaches Anthropic — even if a model requests more tokens, the proxy blocks it.
+Quotas are enforced by `quota-proxy` before a generated instance reaches the configured upstream (CLIProxyAPI by default, or direct API if reconfigured).
 
 ```
 📊 Token report (2026-02):
@@ -353,7 +396,8 @@ The admin instance is named **Admin** 🏛️ (the head of a Capuchin monastery 
 
 ```
 CortexForge/
-├── quota-proxy/          # sole holder of ANTHROPIC_API_KEY
+├── cliproxyapi/          # CLIProxyAPI config and entrypoint for OAuth proxy mode
+├── quota-proxy/          # quota/rate-limit/audit proxy for generated instances
 │   ├── proxy.py          # HTTP proxy + SQLite quota & audit log
 │   └── Dockerfile
 ├── broker/               # message bus between assistants
@@ -390,14 +434,14 @@ CortexForge/
 │   └── SECURITY.md       # threat model, CVE table, hardening
 ├── .github/
 │   ├── workflows/
-│   │   ├── security.yml        # Semgrep, CodeQL, Trivy, Gitleaks, Hadolint
+│   │   ├── security.yml        # Gitleaks, Semgrep, Bandit, Trivy, Hadolint, ShellCheck
 │   │   ├── release-please.yml  # automated release PRs
 │   │   ├── release.yml         # GitHub Releases on tag push
 │   │   └── lint-commits.yml    # Conventional Commits enforcement
 │   ├── semgrep/
-│   │   └── ai-security.yml     # 10 custom AI-specific security rules
+│   │   └── ai-security.yml     # 14 custom AI/security rules
 │   └── scripts/
-│       └── ai_security_check.py  # 8 project-specific security checks
+│       └── ai_security_check.py  # 9 project-specific security checks
 ├── CHANGELOG.md
 ├── VERSION
 └── docker-compose.yml
@@ -411,37 +455,41 @@ GitHub Actions runs on every push and PR:
 
 | Workflow | Jobs | What it checks |
 |---|---|---|
-| `security.yml` | secrets-scan, sast-python, ai-security, codeql, docker-lint, shellcheck, deps-audit, trivy-images | Full security surface |
+| `security.yml` | secrets-scan, sast-python, ai-security, docker-lint, shellcheck, deps-audit, trivy-images | Secret scanning, Python SAST, custom AI checks, container lint/scans |
 | `release-please.yml` | release-please | Opens Release PR, updates `CHANGELOG.md` + `VERSION` |
 | `release.yml` | github-release | Creates GitHub Release with notes on `v*.*.*` tag |
 | `lint-commits.yml` | pr-title, commits, release-ready | Conventional Commits on PR + commit messages |
 
-**Custom AI security rules** (`ai_security_check.py`) check 8 project-specific patterns:
+**Custom Python checks** (`ai_security_check.py`) cover 9 project-specific patterns:
 - Broker inbox access without auth check
 - Quota check order (must be before upstream request)
 - MCP server auth + timing attack on token compare
 - Service-agent skill name injection (subprocess before `ALLOWED_SKILLS` check)
 - Hardcoded tokens (6 patterns: Anthropic, GitLab, GitHub, Slack, AWS, Telegram)
+- Sensitive OAuth/token files and token-like values in text files
 - Docker network exposure for sensitive services
 - Path traversal in `add-user.sh`
 - Real secrets in `.env.example`
+
+`.github/semgrep/ai-security.yml` currently defines 14 Semgrep-style AI/security rules.
 
 Current version: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/example-org/cortex-forge/releases)
 
 ---
 
-## Security Highlights
+## Security Notes
 
-- **API key isolation** — `ANTHROPIC_API_KEY` is never mounted into instance containers; they only get a `QUOTA_KEY` scoped to their own quota
-- **Network segmentation** — 4 Docker networks; instances on `corp-internal` (internal: true) cannot reach the internet directly
-- **Constant-time token comparison** — all Bearer token checks use `hmac.compare_digest`
-- **Rate limiting** — leaky bucket per IP on admin endpoints; message size limits on broker
-- **Resource limits** — CPU and RAM caps on every container via `deploy.resources`
-- **Non-root containers** — all containers run as unprivileged `app` user with `no-new-privileges:true`
-- **Read-only mounts** — skill directories and `enrich.py` mounted `:ro`
-- **Audit log** — every API call, quota change and admin action logged to SQLite
+CortexForge has several useful security experiments, but they are not a production security model:
 
-Full details: [docs/SECURITY.md](docs/SECURITY.md)
+- **Quota key pattern** — generated user instances use `QUOTA_KEY_*` values instead of a direct upstream API key
+- **Network segmentation** — `corp-internal` and `corp-admin` are internal Docker networks, while `corp-outbound` allows Telegram/external calls
+- **Constant-time token comparison** — bearer token checks use `hmac.compare_digest`
+- **Rate limiting and message limits** — implemented in the proxy/broker paths
+- **Resource limits** — CPU and RAM caps are configured through Compose `deploy.resources`
+- **Dangerous admin power by design** — the admin instance mounts the whole project at `/infra` and has Docker socket access
+- **Audit and quota data** — SQLite storage is used for quota, broker, monitor and service-agent state
+
+Use [docs/SECURITY.md](docs/SECURITY.md) as a threat-model note, not as a certification or production hardening guarantee.
 
 ---
 
@@ -466,14 +514,15 @@ Common causes:
 - Invalid `TELEGRAM_BOT_TOKEN` — check with `curl https://api.telegram.org/bot<token>/getMe`
 - Missing required field in `.env`
 
-### quota-proxy can't reach api.anthropic.com
+### quota-proxy / CLIProxyAPI upstream calls fail
 
-Verify `quota-proxy` is on the `corp-egress` network:
+Verify `quota-proxy` and CLIProxyAPI are on the `corp-egress` network:
 ```bash
 docker inspect corp-quota | grep -A5 Networks
+docker inspect corp-cliproxyapi | grep -A5 Networks
 ```
 
-Should include `corp-egress`. If not, run `make deploy` to recreate with the current `docker-compose.yml`.
+Both should include `corp-egress`. If CLIProxyAPI has no OAuth credential in its volume, complete the OAuth bootstrap first. If networks are wrong, run `make deploy` to recreate with the current `docker-compose.yml`.
 
 ### Token quota exceeded unexpectedly
 

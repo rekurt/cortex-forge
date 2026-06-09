@@ -5,6 +5,14 @@ All notable changes to CortexForge will be documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org/).
 Releases are automated via [release-please](https://github.com/googleapis/release-please).
 
+## [0.5.1](https://github.com/example-org/cortex-forge/compare/v0.5.0...v0.5.1) (2026-06-10)
+
+
+### Documentation
+
+* clarify that CortexForge is an experimental toy project and is not production-safe
+* refresh README and README.ru with current CLIProxyAPI, Docker network, and security-check details
+
 ## [0.5.0](https://github.com/example-org/cortex-forge/compare/v0.4.0...v0.5.0) (2026-03-19)
 
 

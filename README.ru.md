@@ -1,60 +1,82 @@
-# 🐒 CortexForge
+# 🐒 CortexForge — игрушечный проект, небезопасен для production
 
 <p align="center">
   <img src="assets/banner.jpg" alt="CortexForge — изолированные AI-персонажи для каждого сотрудника" width="1200"/>
 </p>
 
+> **Экспериментальный проект для развлечения. Не использовать в production.**
+> CortexForge — это Docker Compose playground для экспериментов с изолированными AI-инстансами, квотами, мессенджером и персонажами. Проект **не проходил аудит**, **не рассчитан на реальные данные сотрудников** и содержит намеренно мощные admin-возможности: доступ к Docker socket, rw-монтирование всего проекта и OAuth-proxy эксперименты. Это лаборатория, а не enterprise security product.
+>
 > **Language / Язык:** [English](README.md) | Русский
 
-[![Version](https://img.shields.io/github/v/tag/user-1/cortex-forge?label=версия&color=blue)](https://github.com/example-org/cortex-forge/releases)
+[![Version](https://img.shields.io/github/v/tag/example-org/cortex-forge?label=версия&color=blue)](https://github.com/example-org/cortex-forge/releases)
 [![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
 
-Корпоративная инфраструктура AI-ассистентов на базе [OpenClaw](https://github.com/openclaw/openclaw).
+CortexForge — экспериментальная песочница AI-ассистентов на базе [OpenClaw](https://github.com/openclaw/openclaw).
 
-Каждый сотрудник — **изолированный персонаж**: свой Telegram-бот, своя память, свой характер.  
-Один сервер. Нулевые утечки данных между пользователями. Полный контроль расходов на токены.
+Идея простая: поднять на одном хосте несколько изолированных Telegram-ботов, у каждого — свой workspace, персонаж, квота токенов и inbox.
 
 ---
 
-## Линейка продуктов
+## Что это за проект
 
-CortexForge поставляется как набор сфокусированных компонентов — разворачивайте все или только нужные:
+Проект полезен для:
+
+- экспериментов с персональными AI-инстансами в контейнерах
+- проверки квотирования перед model API
+- простого мессенджера между ассистентами
+- прототипирования persona/workspace-based поведения
+- локального запуска automation skills через HTTP API
+
+Проект **не подходит** для:
+
+- production-ассистентов сотрудников
+- регулируемых данных, секретов, клиентских данных и конфиденциальных документов
+- multi-tenant сценариев с реальными trust boundaries
+- окружений, где недопустимы Docker socket, широкие bind mounts или OAuth-proxy эксперименты
+
+---
+
+## Компоненты
+
+CortexForge состоит из нескольких небольших сервисов:
 
 | Компонент | Описание |
 |---|---|
-| 🧠 **CortexForge Core** | Основной рантайм — изолированные AI-персонажи, по одному на сотрудника |
-| 🔐 **CortexForge Proxy** | Квотирование токенов — единственный контейнер, который хранит реальный API-ключ |
-| 🏛️ **CortexForge Admin** | Admin-инстанс — управление инфраструктурой, квотами и Docker |
-| 📨 **CortexForge Broker** | Шина сообщений — позволяет ассистентам отправлять сообщения друг другу |
+| **OpenClaw-инстансы** | Один admin-инстанс и опциональные сгенерированные user-инстансы |
+| **CLIProxyAPI** | Опциональный OAuth-прокси для Codex/Claude Max-like доступа; хранит OAuth-сессию в Docker volume |
+| **quota-proxy** | Квоты, rate-limit и аудит перед upstream model endpoint |
+| **message-broker** | SQLite-backed inbox/шина сообщений между инстансами |
+| **resource-monitor** | Метрики контейнеров и quota alerts |
+| **service-agent** | Локальный HTTP API, который запускает разрешённые skills как subprocess |
 
 ---
 
-## Зачем CortexForge?
+## Зачем он существует
 
-Большинство команд используют единый AI-инструмент — один контекст на всех, никаких личных настроек, и непонятно кто сколько тратит. CortexForge решает это:
+Проект вырос из идеи посмотреть, как может выглядеть “офис маленьких персональных AI-ботов”. Фокус — операционные механики, а не production security:
 
-| Проблема | Решение |
+| Эксперимент | Реализация |
 |---|---|
-| Общий API-ключ, нет учёта расходов | Квоты токенов на инстанс в SQLite, отчёт в реальном времени |
-| Все сотрудники в одном контексте | Полная изоляция — у каждого своя память и персонаж |
-| Один ассистент на всех | Каждый сотрудник настраивает персонажа под себя (имя, стиль, скиллы) |
-| Утечка API-ключа через промпты | Ключ только в `quota-proxy`; инстансы его не видят никогда |
-| Нет audit trail | Полный лог каждого API-вызова, изменения квоты, действия админа |
-| Сложный онбординг/оффбординг | `make add-user` / `make remove-user` — одна команда |
+| Контекст на инстанс | Отдельные workspace, memory, Telegram token и persona files |
+| Квотирование | `quota-proxy` хранит месячные счётчики в SQLite |
+| Admin control plane | Admin OpenClaw-инстанс монтирует repo как `/infra` и видит Docker |
+| Сообщения между ботами | `message-broker` даёт `/send`, `/inbox` и admin inbox views |
+| Skill execution | `service-agent` читает manifests и запускает allowlisted subprocesses |
 
 ---
 
 ## Возможности
 
-- 🔒 **Ключ не утекает** — `ANTHROPIC_API_KEY` живёт только в `quota-proxy`; инстансы получают `QUOTA_KEY` без доступа к API
+- 🔒 **Паттерн quota key** — user-инстансы получают `QUOTA_KEY_*` и ходят в локальный `quota-proxy`
 - 📊 **Квоты токенов** — месячные лимиты на инстанс с предупреждением (80%) и жёстким порогом (100%); меняются без рестарта
-- 🧑‍🤝‍🧑 **Изолированные персонажи** — у каждого сотрудника свой бот, воркспейс, память и характер (`SOUL.md`)
+- 🧑‍🤝‍🧑 **Изолированные персонажи** — у каждого сгенерированного инстанса свой бот, воркспейс, память и характер (`SOUL.md`)
 - 💬 **Межинстансные сообщения** — ассистенты могут отправлять сообщения друг другу через `message-broker`
-- 🏛️ **Инстанс-администратор (Admin)** — выделенный admin-бот с полным доступом к инфраструктуре, управлением квотами и Docker
+- 🏛️ **Admin-инстанс** — намеренно мощный admin-бот с доступом к `/infra` и Docker
 - 📈 **Resource Monitor** — метрики CPU/RAM/диска с настраиваемыми порогами алертов
 - 🔌 **Service Agent** — HTTP API для бэкенд-сервисов, запускает скиллы как субпроцессы (например, compliance-проверки)
-- 🛡️ **Security pipeline** — Semgrep, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck при каждом коммите
+- 🛡️ **Security checks** — Gitleaks, Semgrep, Bandit, Trivy, Hadolint, ShellCheck и кастомные AI checks в CI
 - 🔄 **Release automation** — release-please автогенерирует changelog и GitHub Releases при мёрдже в `master`
 - 🐳 **Только Docker Compose** — без Kubernetes и Helm; работает на одном Ubuntu VPS
 
@@ -72,7 +94,7 @@ CortexForge поставляется как набор сфокусирован�
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
 │       │             │             │                              │
 │       └─────────────┼─────────────┘                              │
-│                     │  ANTHROPIC_BASE_URL=http://quota-proxy     │
+│                     │  openclaw.json baseUrl=http://quota-proxy  │
 │            ┌────────▼─────────┐                                  │
 │            │   quota-proxy    │  corp-internal                   │
 │            │   :9090          │  corp-admin                      │
@@ -82,7 +104,7 @@ CortexForge поставляется как набор сфокусирован�
 │            │  ✓ audit log     │                                  │
 │            └────────┬─────────┘                                  │
 │                     │                                            │
-│                     ▼  api.anthropic.com                         │
+│                     ▼  CLIProxyAPI или api.anthropic.com         │
 │                                                                  │
 │  ┌───────────────────────┐   ┌──────────────────────────────┐   │
 │  │  message-broker :8080 │   │  resource-monitor :9091      │   │
@@ -101,20 +123,21 @@ CortexForge поставляется как набор сфокусирован�
 ### Как проходит запрос
 
 1. Сотрудник отправляет сообщение своему Telegram-боту
-2. OpenClaw внутри контейнера обращается к Anthropic API — но `ANTHROPIC_BASE_URL` указывает на `quota-proxy`, а не на Anthropic напрямую
-3. `quota-proxy` проверяет квоту токенов, обновляет счётчик в SQLite, затем форвардит запрос в `api.anthropic.com` через сеть `corp-egress`
+2. OpenClaw внутри контейнера обращается к провайдеру из `openclaw.json`; user template указывает `baseUrl` на `http://quota-proxy:9090`
+3. `quota-proxy` проверяет квоту токенов, обновляет счётчик в SQLite, затем по умолчанию форвардит запрос в CLIProxyAPI (`http://cliproxyapi:8317`) или в direct upstream, если он настроен отдельно
 4. Если квота исчерпана — `quota-proxy` немедленно возвращает HTTP 429, реальный вызов не делается
 
 ### Docker-сети
 
 | Сеть | `internal` | Кто подключён | Назначение |
 |---|---|---|---|
-| `corp-internal` | ✅ да | все инстансы, broker, quota-proxy, monitor | основная шина — нет прямого интернета |
+| `corp-internal` | ✅ да | admin, сгенерированные инстансы, broker, quota-proxy, monitor, service-agent | внутренняя шина — нет прямого интернета |
 | `corp-admin` | ✅ да | admin, quota-proxy, monitor | управление квотами и метриками — нет интернета |
-| `corp-egress` | ❌ нет | **только** quota-proxy | единственный путь до `api.anthropic.com` |
+| `corp-egress` | ❌ нет | quota-proxy, CLIProxyAPI | egress к upstream model/OAuth |
 | `corp-services` | ❌ нет | service-agent | вызовы из бэкенд-сервисов |
+| `corp-outbound` | ❌ нет | admin и сгенерированные инстансы | Telegram и другие внешние non-model API |
 
-Инстансы подключены только к `corp-internal` — они не могут выйти в интернет напрямую, не видят `corp-admin` и не имеют доступа к `service-agent`. `quota-proxy` — единственный мост между внутренними сетями и интернетом.
+Сгенерированные user-инстансы не подключаются к `corp-admin` и не монтируют `/infra`. Но у них есть `corp-outbound` для Telegram и других внешних вызовов, поэтому это **не** air-gapped и не production-grade isolation model.
 
 ---
 
@@ -128,12 +151,14 @@ CortexForge поставляется как набор сфокусирован�
 | Диск | 20 GB | 50+ GB |
 | Docker | 24+ | latest |
 | Docker Compose | 2.x | latest |
+| Python | 3.12+ | 3.12+ |
+| ShellCheck | опционально локально | нужен для полного локального lint |
 
 ---
 
 ## Быстрый старт
 
-### 1. Клонировать и настроить глобальные секреты
+### 1. Клонировать и настроить локальные секреты
 
 ```bash
 git clone https://github.com/example-org/cortex-forge.git /opt/CortexForge
@@ -144,22 +169,40 @@ chmod 600 .env
 nano .env
 ```
 
-Минимально необходимые поля:
+Минимально необходимые локальные значения:
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...          # ваш ключ Anthropic
-QUOTA_ADMIN_TOKEN=<random-32-chars>   # токен управления квотами
+ANTHROPIC_API_KEY=sk-ant-...          # используется admin-инстансом напрямую
+CLIPROXY_API_KEY=clip-...             # auth quota-proxy -> CLIProxyAPI
+QUOTA_ADMIN_TOKEN=<random-32-chars>   # токен admin API quota-proxy
 BROKER_KEY_ADMIN=<random-32-chars>    # ключ admin в брокере
+BROKER_KEY_SERVICE=<random-32-chars>  # ключ service-agent в брокере
+BROKER_KEY_MONITOR=<random-32-chars>  # ключ monitor в брокере
 MONITOR_ADMIN_TOKEN=<random-32-chars> # токен resource-monitor API
-SERVICE_API_KEY=<random-32-chars>     # Bearer-токен service-agent
+SERVICE_API_KEY=svc-...               # Bearer-токен service-agent
 ```
 
 Сгенерировать случайный токен:
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+python3 -c "import secrets; print('clip-' + secrets.token_urlsafe(24))"
+python3 -c "import secrets; print('svc-' + secrets.token_urlsafe(24))"
 ```
 
-### 2. Создать admin-инстанс (Admin)
+### 2. Поднять OAuth для CLIProxyAPI или сменить upstream mode
+
+`docker-compose.yml` сейчас направляет `quota-proxy` в CLIProxyAPI:
+
+```yaml
+UPSTREAM_URL=http://cliproxyapi:8317
+UPSTREAM_API_KEY=${CLIPROXY_API_KEY}
+```
+
+Значит, до реальных model calls для user-инстансов CLIProxyAPI должен иметь OAuth credential в Docker volume `cliproxyapi-auths`. Headless-процедура логина описана в [CLAUDE.md](CLAUDE.md). Без OAuth state контейнер CLIProxyAPI может рестартовать без явной ошибки, но реальные вызовы модели через него работать не будут.
+
+Для более простого локального эксперимента можно заменить `UPSTREAM_URL` на direct provider endpoint и передать совместимый upstream key. Реальные credentials не коммитить.
+
+### 3. Создать admin-инстанс (Admin)
 
 Admin-инстанс **обязателен** — `docker-compose.yml` ссылается на `instances/admin/.env` при старте. Без этого файла `docker compose config` упадёт с ошибкой.
 
@@ -178,7 +221,7 @@ TELEGRAM_ALLOW_FROM=000000000         # Telegram user ID
 BROKER_KEY=<то же что BROKER_KEY_ADMIN> # должно совпадать с глобальным .env
 ```
 
-### 3. Проверить конфигурацию
+### 4. Проверить конфигурацию
 
 ```bash
 make security-check
@@ -186,7 +229,7 @@ make security-check
 
 Все пункты должны показывать ✅. Исправь ❌ до деплоя.
 
-### 4. Добавить первого сотрудника
+### 5. Добавить первый сгенерированный инстанс
 
 ```bash
 make add-user NAME=user-2 \
@@ -199,7 +242,7 @@ make add-user NAME=user-2 \
 - Создаёт `instances/user-2/` из шаблона
 - Генерирует уникальные `BROKER_KEY` и `QUOTA_KEY`
 - Добавляет ключи и лимит 1M токенов/мес в `.env`
-- Выводит YAML-блок для вставки в `docker-compose.yml`
+- Добавляет сервис в `docker-compose.override.yml` (gitignored)
 
 Опционально — заполнить личные токены и настроить персонажа:
 ```bash
@@ -207,7 +250,7 @@ nano instances/user-2/.env               # Яндекс OAuth, GitLab token, etc
 nano instances/user-2/workspace/SOUL.md  # стиль и характер ассистента
 ```
 
-### 5. Запустить
+### 6. Запустить
 
 ```bash
 make deploy
@@ -222,7 +265,7 @@ make status    # все контейнеры должны быть Up (healthy)
 
 | Переменная | Обязательно | Описание |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | ✅ | API-ключ Anthropic — читает только `quota-proxy` |
+| `ANTHROPIC_API_KEY` | ✅ | API-ключ Anthropic для прямого доступа admin-инстанса; сгенерированные инстансы должны ходить через quota keys и `quota-proxy` |
 | `QUOTA_ADMIN_TOKEN` | ✅ | Bearer-токен для API управления квотами |
 | `QUOTA_DEFAULT_MONTHLY` | — | Лимит токенов по умолчанию (по умолчанию: `1000000`) |
 | `BROKER_KEY_ADMIN` | ✅ | Ключ admin в брокере |
@@ -297,7 +340,7 @@ make status    # все контейнеры должны быть Up (healthy)
 
 ## Квоты токенов
 
-Квоты применяются в `quota-proxy` до того, как запрос достигает Anthropic — даже если модель запрашивает больше токенов, прокси блокирует это.
+Квоты применяются в `quota-proxy` до того, как сгенерированный инстанс достигает настроенного upstream (по умолчанию CLIProxyAPI, либо direct API при ручной перенастройке).
 
 ```
 📊 Отчёт по токенам (2026-02):
@@ -353,7 +396,8 @@ Admin-инстанс называется **Admin** 🏛️ (настоятел�
 
 ```
 CortexForge/
-├── quota-proxy/          # единственное место с ANTHROPIC_API_KEY
+├── cliproxyapi/          # конфиг и entrypoint CLIProxyAPI для OAuth proxy mode
+├── quota-proxy/          # quota/rate-limit/audit proxy для сгенерированных инстансов
 │   ├── proxy.py          # HTTP-прокси + SQLite quota & audit log
 │   └── Dockerfile
 ├── broker/               # шина сообщений между ассистентами
@@ -390,14 +434,14 @@ CortexForge/
 │   └── SECURITY.md       # threat model, таблица CVE, hardening
 ├── .github/
 │   ├── workflows/
-│   │   ├── security.yml        # Semgrep, CodeQL, Trivy, Gitleaks, Hadolint
+│   │   ├── security.yml        # Gitleaks, Semgrep, Bandit, Trivy, Hadolint, ShellCheck
 │   │   ├── release-please.yml  # автоматические Release PR
 │   │   ├── release.yml         # GitHub Releases при пуше тега
 │   │   └── lint-commits.yml    # Conventional Commits
 │   ├── semgrep/
-│   │   └── ai-security.yml     # 10 кастомных AI-правил безопасности
+│   │   └── ai-security.yml     # 14 кастомных AI/security правил
 │   └── scripts/
-│       └── ai_security_check.py  # 8 проектных проверок безопасности
+│       └── ai_security_check.py  # 9 проектных проверок безопасности
 ├── CHANGELOG.md
 ├── VERSION
 └── docker-compose.yml
@@ -411,37 +455,41 @@ GitHub Actions запускается при каждом пуше и PR:
 
 | Workflow | Jobs | Что проверяет |
 |---|---|---|
-| `security.yml` | secrets-scan, sast-python, ai-security, codeql, docker-lint, shellcheck, deps-audit, trivy-images | Полная поверхность безопасности |
+| `security.yml` | secrets-scan, sast-python, ai-security, docker-lint, shellcheck, deps-audit, trivy-images | Secret scanning, Python SAST, кастомные AI checks, container lint/scans |
 | `release-please.yml` | release-please | Открывает Release PR, обновляет `CHANGELOG.md` + `VERSION` |
 | `release.yml` | github-release | Создаёт GitHub Release с release notes при теге `v*.*.*` |
 | `lint-commits.yml` | pr-title, commits, release-ready | Conventional Commits на PR и коммитах |
 
-**Кастомные AI-правила** (`ai_security_check.py`) проверяют 8 проектных паттернов:
+**Кастомные Python-проверки** (`ai_security_check.py`) покрывают 9 проектных паттернов:
 - Чтение inbox брокера без проверки авторизации
 - Порядок проверки квоты (должна быть до upstream-запроса)
 - Auth MCP-сервера + timing attack на сравнение токена
 - Инъекция имени скилла в service-agent (subprocess до проверки `ALLOWED_SKILLS`)
 - Захардкоженные токены (6 паттернов: Anthropic, GitLab, GitHub, Slack, AWS, Telegram)
+- Чувствительные OAuth/token файлы и token-like значения в текстовых файлах
 - Docker network exposure для чувствительных сервисов
 - Path traversal в `add-user.sh`
 - Реальные секреты в `.env.example`
+
+`.github/semgrep/ai-security.yml` сейчас содержит 14 Semgrep-style AI/security rules.
 
 Текущая версия: [VERSION](VERSION) · [CHANGELOG](CHANGELOG.md) · [Releases](https://github.com/example-org/cortex-forge/releases)
 
 ---
 
-## Безопасность — ключевые моменты
+## Заметки по безопасности
 
-- **Изоляция API-ключа** — `ANTHROPIC_API_KEY` никогда не монтируется в инстансы; они получают только `QUOTA_KEY` в рамках своей квоты
-- **Сегментация сетей** — 4 Docker-сети; инстансы на `corp-internal` (internal: true) не могут выйти в интернет напрямую
-- **Constant-time сравнение токенов** — все Bearer token checks через `hmac.compare_digest`
-- **Rate limiting** — leaky bucket по IP на admin-эндпоинтах; лимиты размера сообщений в брокере
-- **Resource limits** — лимиты CPU и RAM на каждый контейнер через `deploy.resources`
-- **Non-root контейнеры** — все контейнеры работают от непривилегированного пользователя `app` с `no-new-privileges:true`
-- **Read-only монтирование** — директории скиллов и `enrich.py` монтируются `:ro`
-- **Audit log** — каждый API-вызов, изменение квоты и действие администратора логируется в SQLite
+CortexForge содержит несколько полезных security experiments, но это не production security model:
 
-Подробности: [docs/SECURITY.md](docs/SECURITY.md)
+- **Quota key pattern** — сгенерированные user-инстансы используют `QUOTA_KEY_*`, а не прямой upstream API key
+- **Сегментация сетей** — `corp-internal` и `corp-admin` internal Docker-сети, а `corp-outbound` разрешает Telegram/external calls
+- **Constant-time сравнение токенов** — bearer token checks используют `hmac.compare_digest`
+- **Rate limiting и message limits** — реализованы в proxy/broker paths
+- **Resource limits** — лимиты CPU/RAM заданы через Compose `deploy.resources`
+- **Опасная admin-мощность по дизайну** — admin-инстанс монтирует весь проект в `/infra` и имеет Docker socket access
+- **Audit/quota data** — SQLite используется для quota, broker, monitor и service-agent state
+
+Используй [docs/SECURITY.md](docs/SECURITY.md) как threat-model заметку, не как сертификацию или production hardening guarantee.
 
 ---
 
@@ -466,14 +514,15 @@ make logs NAME=user-2
 - Неверный `TELEGRAM_BOT_TOKEN` — проверь: `curl https://api.telegram.org/bot<token>/getMe`
 - Отсутствует обязательное поле в `.env`
 
-### quota-proxy не может достучаться до api.anthropic.com
+### quota-proxy / CLIProxyAPI не могут выполнить upstream call
 
-Проверь что `quota-proxy` подключён к сети `corp-egress`:
+Проверь, что `quota-proxy` и CLIProxyAPI подключены к сети `corp-egress`:
 ```bash
 docker inspect corp-quota | grep -A5 Networks
+docker inspect corp-cliproxyapi | grep -A5 Networks
 ```
 
-Должна быть `corp-egress`. Если нет — выполни `make deploy` для пересоздания с актуальным `docker-compose.yml`.
+У обоих должна быть `corp-egress`. Если в volume CLIProxyAPI нет OAuth credential, сначала выполни OAuth bootstrap. Если сети неверные — выполни `make deploy` для пересоздания с актуальным `docker-compose.yml`.
 
 ### Квота исчерпана неожиданно
 
