@@ -15,6 +15,8 @@
 
 CortexForge is an experimental AI-assistant infrastructure sandbox built on [OpenClaw](https://github.com/openclaw/openclaw).
 
+[Project website](https://rekurt.github.io/cortex-forge/) · [All projects by rekurt](https://rekurt.github.io/projects/)
+
 The idea is simple: run several isolated Telegram-bot assistant instances on one host, each with its own workspace, persona, token quota, and message inbox.
 
 ---
