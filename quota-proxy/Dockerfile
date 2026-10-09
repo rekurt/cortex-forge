@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 # Create non-root user. Container starts as root so proxy.py can fix /data ownership
 # on existing volumes (migration from old root-owned volumes), then drops to 'app'.
 RUN useradd -r -s /usr/sbin/nologin app && mkdir -p /data && chown app:app /data
