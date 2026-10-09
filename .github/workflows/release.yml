@@ -223,7 +223,14 @@ jobs:
           pattern: sbom-*-${{ needs.version.outputs.version }}
           merge-multiple: true
           path: sboms/
-        continue-on-error: true
+      - name: Verify and normalize SBOM filenames
+        run: |
+          set -euo pipefail
+          for service in broker quota-proxy resource-monitor service-agent; do
+            file="sboms/sbom-${service}-${{ needs.version.outputs.version }}"
+            if [[ -f "$file" ]]; then mv "$file" "$file.spdx.json"; fi
+            test -s "$file.spdx.json"
+          done
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
