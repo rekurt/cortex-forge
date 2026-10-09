@@ -228,6 +228,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name:   "v${{ needs.version.outputs.version }}"
           name:       "v${{ needs.version.outputs.version }}"
           body_path:  release-notes.md
           prerelease: ${{ needs.version.outputs.is_prerelease == 'true' }}
@@ -235,10 +236,10 @@ jobs:
           files: |
             sboms/*.spdx.json
           generate_release_notes: false
-          make_latest: "${{ !contains(github.ref_name, '-') }}"
+          make_latest: "${{ needs.version.outputs.is_prerelease == 'false' }}"
 
       - name: Tag major + minor aliases
-        if: ${{ !contains(github.ref_name, '-') }}
+        if: needs.version.outputs.is_prerelease == 'false'
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"
