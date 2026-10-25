@@ -4,12 +4,8 @@ docker-compose.override.yml
 
 # Секреты — никогда в git
 .env
-.anthropic_tokens.json
-.cli-proxy-api/
-Codex-*.json
 instances/*/.env
 instances/*/hermes_data/
-**/*.env
 **/*.key
 **/*.token
 **/*.db

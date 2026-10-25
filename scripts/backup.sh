@@ -30,7 +30,10 @@ fi
 # ─── 2. Архив instances/ ─────────────────────────────────────────────────────
 tar -czf "$ARCHIVE" \
     --exclude="instances/*/hermes_data/sessions/*" \
+    --exclude="instances/*/.env" \
+    --exclude="instances/*/hermes_data/.env" \
     instances/ 2>&1
+chmod 600 "$ARCHIVE"   # в воркспейсах нет секретов, но права — минимальные
 
 SIZE=$(du -sh "$ARCHIVE" | cut -f1)
 CHANGES+=("архив: $ARCHIVE ($SIZE)")

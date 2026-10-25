@@ -8,7 +8,6 @@ set -euo pipefail
 INFRA="/infra"
 INSTANCES="$INFRA/instances"
 ADMIN_INSTANCE="admin"
-WORKSPACE_PARENT="${WORKSPACE_PARENT:-$INFRA/..}"
 CHANGES=()
 
 # ─── 1. Миграции ────────────────────────────────────────────────────────────
@@ -25,7 +24,7 @@ for INST_DIR in "$INSTANCES"/*/; do
     [ "$NAME" = "_template" ] && continue
     [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Admin свой HEARTBEAT
 
-    WS="$WORKSPACE_PARENT/${NAME}-workspace"
+    WS="$INSTANCES/$NAME/workspace"
     [ -d "$WS" ] || continue
 
     HB="$WS/HEARTBEAT.md"

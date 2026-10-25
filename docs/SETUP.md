@@ -79,7 +79,7 @@ nano instances/admin/.env
 | Ключ | Описание |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Placeholder токена Telegram-бота Admin |
-| `TELEGRAM_ALLOW_FROM` | Telegram ID администратора |
+| `TELEGRAM_ALLOWED_USERS` | Telegram ID администратора |
 | `BROKER_KEY` | То же значение что `BROKER_KEY_ADMIN` в `.env` |
 
 ---

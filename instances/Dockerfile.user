@@ -1,4 +1,4 @@
-FROM nousresearch/hermes-agent:stable
+FROM nousresearch/hermes-agent:v0.22.5
 
 # ffmpeg — для транскрипции голосовых (whisper)
 # tesseract-ocr — распознавание текста на изображениях (OCR, rus+eng)

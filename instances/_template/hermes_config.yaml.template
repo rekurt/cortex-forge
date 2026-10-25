@@ -5,7 +5,7 @@
 #   ANTHROPIC_API_KEY (= QUOTA_KEY_<NAME> — ключ quota-proxy), OPENAI_API_KEY
 
 model:
-  provider: quota-proxy            # кастомный провайдер — локальный quota-proxy
+  provider: anthropic             # anthropic-совместимый эндпоинт (quota-proxy)
   default: claude-sonnet-4-6
   base_url: http://quota-proxy:9090
   api_mode: anthropic_messages
@@ -20,5 +20,7 @@ voice:
 
 terminal:
   cwd: /opt/data/workspace
+  # backend по умолчанию — local exec (агент уже в контейнере;
+  # docker-сэндбокс не нужен — у user-инстансов нет docker socket)
 
 timezone: Europe/Moscow

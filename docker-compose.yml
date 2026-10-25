@@ -130,7 +130,7 @@ services:
       # Весь проект (rw) — admin уже имеет ANTHROPIC_API_KEY через environment
       - ./:/infra/
       - ../:/infra-parent/    # доступ к внешним данным
-      - /var/run/docker.sock:/var/run/docker.sock:rw  # статус контейнеров (read-only)
+      - /var/run/docker.sock:/var/run/docker.sock:rw  # docker API (self-healing, quota-скиллы)
       - /usr/bin/docker:/usr/bin/docker:ro  # docker CLI с хоста
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
@@ -138,7 +138,6 @@ services:
       - BROKER_KEY=${BROKER_KEY_ADMIN}
       - QUOTA_PROXY_URL=http://quota-proxy:9090
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
-      - WORKSPACE_PARENT=/infra-parent           # для sync-instances.sh и migrate-instances.py
       - SERVICE_API_KEY=${SERVICE_API_KEY}
       - HERMES_UID=1000
       - HERMES_GID=1000
@@ -150,7 +149,7 @@ services:
       - corp-admin
       - corp-outbound
     group_add:
-      - "988"  # docker group
+      - "${DOCKER_GID:-999}"  # docker group GID — доступ к /var/run/docker.sock
     security_opt:
       - no-new-privileges:true
     deploy:

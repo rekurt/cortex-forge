@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview
+.PHONY: add-user remove-user bootstrap deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -12,6 +12,11 @@ add-user:
 remove-user:
 	@[ -n "$(NAME)" ] || (echo "❌ NAME= обязателен"; exit 1)
 	@bash scripts/remove-user.sh "$(NAME)"
+
+# make bootstrap — подготовить hermes_data инстансов (каталоги, .env, SOUL.md, права)
+bootstrap:
+	@bash scripts/provision-hermes-data.sh
+	@echo "✅ hermes_data готов"
 
 # ── Деплой ────────────────────────────────────────────────────────────────
 

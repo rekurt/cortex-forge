@@ -324,7 +324,6 @@ instances/<name>/hermes_data/     # маунт → /opt/data (~/.hermes)
 | `scripts/autoupdate.sh` | Cron-скрипт (каждые 5 мин): git pull + rebuild changed |
 | `scripts/sync-instances.sh` | Ежечасный maintenance от admin: миграции, healthcheck |
 | `scripts/fix-permissions.sh` | Восстановить права 600 на .env после git-операций |
-| `scripts/refresh-anthropic-token.sh` | Обновить OAuth-токен из `ANTHROPIC_REFRESH_TOKEN` |
 | `scripts/migrate-instances.py` | Применить миграции ко всем инстансам |
 
 ## Gotchas

@@ -57,7 +57,7 @@ cp .env.example .env
 # Admin instance (required)
 mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
-# Edit instances/admin/.env: set TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM
+# Edit instances/admin/.env: set TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS
 
 # Launch
 make deploy

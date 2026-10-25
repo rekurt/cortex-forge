@@ -26,7 +26,7 @@ CortexForge переезжает с [OpenClaw](https://github.com/openclaw/openc
 
 | Что | Значение |
 |---|---|
-| Образ | `nousresearch/hermes-agent` (Docker Hub, amd64/arm64) |
+| Образ | `nousresearch/hermes-agent` — запинен `v0.22.5` (не `stable`/`latest`: плавающий тег + auto-update = неконтролируемый дрейф; обновления вручную) |
 | Запуск | `command: ["gateway", "run"]`, ENTRYPOINT `/init` (s6-overlay) — не переопределять |
 | Данные | том `…:/opt/data` = `~/.hermes`: `.env`, `config.yaml`, `SOUL.md`, `sessions/`, `memories/`, `skills/`, `home/`, `logs/` |
 | Права | env `HERMES_UID`/`HERMES_GID` — s6 ремапит внутреннего пользователя; у нас `1000:1000` (как раньше `node`) |
@@ -108,11 +108,32 @@ instances/<name>/
 
 ## 7. Rollback
 
-`git checkout <прошлый тег> && docker compose up -d` — код откатывается, данные не переносились,
-поэтому откат означает старт с чистыми старыми воркспейсами. Квоты в quota-proxy (SQLite)
-не зависят от агента и остаются.
+Big-bang без импорта данных: откат = **повторный fresh-install на старой версии**.
+`git checkout <прошлый тег> && docker compose up -d` поднимает старый код, но старые
+`openclaw_data/` удалены — инстансы нужно пересоздать через `make add-user` с теми же
+`BOT_TOKEN`/`TG_ID` (см. §8, шаг 1 — токены сохраняются до wipe). Квоты в quota-proxy
+(SQLite) не зависят от агента и остаются.
 
-## 8. Оценка
+## 8. Runbook деплоя на VPS
+
+1. **Сохранить токены ДО wipe** — иначе Telegram-боты не восстановить: со старого хоста
+   забрать `instances/*/.env` и/или `openclaw_data/*/openclaw.json` (оттуда достаются
+   `BOT_TOKEN` и `allowFrom`). Хранить вне репо.
+2. `git fetch && git checkout migrate/hermes` (после ревью — merge в master и pull).
+3. `make bootstrap` — создаёт `instances/*/hermes_data` (+`.env` из старых имён переменных,
+   `SOUL.md`, права 1000:1000).
+4. Пересоздать инстансы: `make add-user NAME=… BOT_TOKEN=… TG_ID=…` (токены из шага 1).
+5. `docker compose build && docker compose up -d`.
+6. Smoke-тест одного инстанса по чек-листу §6 + доп-проверки:
+   - dashboard открывается на `127.0.0.1:<порт>`; если connection refused — dashboard
+     биндится на loopback контейнера (проверить `--host`/config dashboard у Hermes);
+   - интерполяция `${VAR}` в config.yaml работает (`hermes status` внутри контейнера);
+   - фактический layout `hermes_data/sessions/` сверить с exclude в `backup.sh`;
+   - gateway API `8642` — если dashboard-UI ходит к API с хоста, опубликовать порт.
+7. Повторить для остальных инстансов, удалить старые `openclaw_data/` и образы
+   `ghcr.io/openclaw/*`.
+
+## 9. Оценка
 
 | Этап | Оценка |
 |---|---|
@@ -120,15 +141,19 @@ instances/<name>/
 | Деплой и верификация | 0,5 дня |
 | **Итого** | **~3 дня** (простой инстансов: часы, а не дни) |
 
-## 9. Открытые вопросы — закрыты (проверено по докам и Docker Hub registry)
+## 10. Открытые вопросы — закрыты (проверено по докам и Docker Hub registry)
 
 - **Q1** OAuth Claude Max: живёт в CLIProxyAPI (volume `cliproxyapi-auths`); инстансы ходят
-  через quota-proxy с quota-key. `refresh-oauth.py`/`update-token.py` удалены как легаси.
-- **Q2** Тег образа: `nousresearch/hermes-agent:stable` существует (не только `-desktop`) —
-  проверено через registry API.
+  через quota-proxy с quota-key. `refresh-oauth.py`/`update-token.py`/`refresh-anthropic-token.sh`/
+  `refresh_token.py` удалены как легаси.
+- **Q2** Тег образа: существует `stable` и версионные теги; **выбран и запинен `v0.22.5`**
+  (плавающий `stable` + auto-update = неконтролируемый дрейф, см. R-ревью).
 - **Q3** Голосовые: транскрибируются gateway автоматически; STT — `voice.stt.provider`
   в `config.yaml` (`openai` / `local` faster-whisper). В шаблон добавлен `openai`.
 - **Q4** Сессии: `~/.hermes/sessions/` → exclude в `backup.sh` верный.
 - **Q5** Порты: dashboard `9119`, gateway API `8642`.
 - **Q6** Telegram: `TELEGRAM_BOT_TOKEN` + `TELEGRAM_ALLOWED_USERS` (числовые ID через запятую)
   в `~/.hermes/.env`; deny-by-default — семантика соответствует старому `allowFrom`.
+- **Доп. подтверждения по докам:** интерполяция `${VAR}` в config.yaml — документирована
+  (Hermes Configuration, «Environment Variable Substitution»); ремап пользователя через
+  `HERMES_UID/GID` (s6-overlay stage2) — описан в официальном docker-compose.yml Hermes.

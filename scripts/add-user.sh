@@ -28,10 +28,19 @@ if [ -n "$TG_ID" ] && ! echo "$TG_ID" | grep -qE '^[0-9]+$'; then
   exit 1
 fi
 
-# Авто-порт: считаем существующие инстансы и берём 18790+N
+# TG_ID обязателен: пустой allowlist + deny-by-default = бот молча игнорирует всех
+if [ -z "$TG_ID" ]; then
+  echo "❌ TG_ID= обязателен (иначе бот будет глух ко всем)"
+  exit 1
+fi
+
+# Авто-порт: первый свободный 18790+N (проверяем занятость в override)
 if [ -z "$UI_PORT" ]; then
-  INSTANCE_COUNT=$(find instances -mindepth 1 -maxdepth 1 -type d ! -name "_template" ! -name "admin" | wc -l | tr -d ' ')
-  UI_PORT=$((18790 + INSTANCE_COUNT))
+  OVERRIDE_CHECK="docker-compose.override.yml"
+  UI_PORT=18790
+  while grep -q ":${UI_PORT}:9119" "$OVERRIDE_CHECK" 2>/dev/null; do
+    UI_PORT=$((UI_PORT + 1))
+  done
 fi
 TEMPLATE="instances/_template"
 TARGET="instances/$NAME"
@@ -61,6 +70,9 @@ if [ ! -d "$INSTANCE_WORKSPACE" ]; then
     echo "  ✅ Workspace создан в instances/$NAME/workspace/"
 fi
 mkdir -p "$INSTANCE_WORKSPACE/skills" "$INSTANCE_WORKSPACE/memory"
+
+# Персона: Hermes читает SOUL.md из ~/.hermes (=/opt/data), шаблон живёт в workspace
+cp "$INSTANCE_WORKSPACE/SOUL.md" "$TARGET/hermes_data/SOUL.md"
 
 # Подставляем переменные в workspace (безопасно для спецсимволов в FULL_NAME)
 python3 -c "
@@ -116,13 +128,17 @@ docker run --rm \
     -v "$(pwd)/$TARGET/workspace:/data2" \
     alpine chown -R 1000:1000 /data1 /data2
 
-# Добавляем ключи в глобальный .env
-if [ -f ".env" ]; then
-    echo "BROKER_KEY_${NAME_UPPER}=${BROKER_KEY}"  >> .env
-    echo "QUOTA_KEY_${NAME_UPPER}=${QUOTA_KEY}"    >> .env
-    echo "QUOTA_LIMIT_${NAME_UPPER}=1000000"       >> .env  # 1M токенов/мес по умолчанию
-    echo "  ✅ Ключи добавлены в .env"
+# Добавляем ключи в глобальный .env — без этого quota-proxy не узнает инстанс
+if [ ! -f ".env" ]; then
+    echo "❌ Корневой .env не найден — QUOTA_KEY не будет зарегистрирован в quota-proxy"
+    exit 1
 fi
+# Гарантия завершающего перевода строки перед append
+[ -s .env ] && [ -n "$(tail -c1 .env)" ] && echo >> .env
+echo "BROKER_KEY_${NAME_UPPER}=${BROKER_KEY}"  >> .env
+echo "QUOTA_KEY_${NAME_UPPER}=${QUOTA_KEY}"    >> .env
+echo "QUOTA_LIMIT_${NAME_UPPER}=1000000"       >> .env  # 1M токенов/мес по умолчанию
+echo "  ✅ Ключи добавлены в .env"
 
 # Добавляем сервис в docker-compose.override.yml (gitignored — не конфликтует с git pull)
 python3 - "$NAME" "$NAME_UPPER" "$UI_PORT" << 'PYEOF'
@@ -189,6 +205,9 @@ p.write_text(content)
 print(f"  ✅ assistant-{name} добавлен в {OVERRIDE}")
 PYEOF
 
+# Валидация итогового compose — ловим YAML-ошибки до деплоя
+docker compose config -q && echo "  ✅ docker compose config валиден"
+
 echo ""
 echo "✅ Инстанс '$NAME' создан"
 echo "   Квота: 1,000,000 токенов/мес (изменить: make set-limit NAME=$NAME LIMIT=500000)"
@@ -196,5 +215,5 @@ echo "   Dashboard: http://localhost:$UI_PORT"
 echo ""
 echo "📋 Далее:"
 echo "  1. nano instances/$NAME/.env               — персональные токены"
-echo "  2. nano instances/$NAME/workspace/SOUL.md    — настроить персонажа"
+echo "  2. nano instances/$NAME/hermes_data/SOUL.md  — настроить персонажа (копия из workspace/SOUL.md)"
 echo "  3. make deploy"

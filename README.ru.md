@@ -217,7 +217,7 @@ nano instances/admin/.env
 
 ```bash
 TELEGRAM_BOT_TOKEN=0000000000:CHANGE_ME_BOT_TOKEN
-TELEGRAM_ALLOW_FROM=000000000         # Telegram user ID
+TELEGRAM_ALLOWED_USERS=000000000         # Telegram user ID
 BROKER_KEY=<то же что BROKER_KEY_ADMIN> # должно совпадать с глобальным .env
 ```
 
@@ -282,7 +282,7 @@ make status    # все контейнеры должны быть Up (healthy)
 | Переменная | Обязательно | Описание |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | ✅ | Placeholder токена Telegram-бота |
-| `TELEGRAM_ALLOW_FROM` | ✅ | Разрешённые Telegram ID через запятую |
+| `TELEGRAM_ALLOWED_USERS` | ✅ | Разрешённые Telegram ID через запятую |
 | `BROKER_KEY` | ✅ | Ключ брокера (генерируется `add-user.sh`) |
 | `YANDEX_OAUTH_TOKEN` | — | Яндекс OAuth для почты / Трекера |
 | `YANDEX_CALDAV_URL` | — | CalDAV URL Яндекс Календаря |

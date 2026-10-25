@@ -42,23 +42,11 @@ def mark_applied(workspace, migration_id):
     applied.add(migration_id)
     f.write_text("\n".join(sorted(applied)) + "\n")
 
-def _workspace_parent():
-    """Resolve parent directory containing external workspaces.
-
-    Inside the admin container WORKSPACE_PARENT=/infra-parent.
-    On the host, falls back to REPO_ROOT.parent.
-    """
-    env = os.environ.get("WORKSPACE_PARENT")
-    if env:
-        return pathlib.Path(env)
-    return REPO_ROOT.parent
-
 def _discover_instances():
     """Find instances and their workspace paths.
 
     Primary: instances/<name>/workspace/ (in-repo).
     """
-    parent = _workspace_parent()
     result = []
     for d in sorted(INSTANCES.iterdir()):
         if not d.is_dir() or d.name == "_template":
@@ -94,7 +82,11 @@ def run():
         print(f"  [{instance_dir.name}] применяю {len(pending)} миграций:")
         instance_updated = False
         for mig_path in pending:
-            mod = load_migration(mig_path)
+            try:
+                mod = load_migration(mig_path)
+            except Exception as e:
+                print(f"    ❌ {mig_path.stem}: загрузка не удалась — {e}")
+                continue
             mid = mig_path.stem
             desc = getattr(mod, "DESCRIPTION", mid)
             try:
