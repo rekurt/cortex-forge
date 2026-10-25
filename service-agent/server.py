@@ -22,18 +22,21 @@ import sqlite3
 import logging
 import threading
 import subprocess
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-SERVICE_PORT         = int(os.environ.get("SERVICE_PORT", "8090"))
-SERVICE_API_KEY      = os.environ.get("SERVICE_API_KEY", "")
-_service_api_hash    = hashlib.sha256(SERVICE_API_KEY.encode()).hexdigest() if SERVICE_API_KEY else ""
-SKILL_TIMEOUT        = int(os.environ.get("SKILL_TIMEOUT", "120"))
-MAX_CONCURRENT_TASKS = int(os.environ.get("MAX_CONCURRENT_TASKS", "5"))
-USAGE_DB             = os.environ.get("USAGE_DB", "/data/usage.db")
+SERVICE_PORT          = int(os.environ.get("SERVICE_PORT", "8090"))
+SERVICE_API_KEY       = os.environ.get("SERVICE_API_KEY", "")
+_service_api_hash     = hashlib.sha256(SERVICE_API_KEY.encode()).hexdigest() if SERVICE_API_KEY else ""
+SKILL_TIMEOUT         = int(os.environ.get("SKILL_TIMEOUT", "120"))
+MAX_CONCURRENT_SKILLS = int(os.environ.get("MAX_CONCURRENT_SKILLS", os.environ.get("MAX_CONCURRENT_TASKS", "5")))
+MAX_CONCURRENT_TASKS  = MAX_CONCURRENT_SKILLS  # backward compatibility alias
+SKILL_RATE_LIMIT      = int(os.environ.get("SKILL_RATE_LIMIT", "30"))
+USAGE_DB              = os.environ.get("USAGE_DB", "/data/usage.db")
 
 MAX_BODY_BYTES       = 1 * 1024 * 1024  # 1 MB — защита от oversized requests
 SKILLS_DIR = Path(os.environ.get("SKILLS_DIR", "/app/skills"))
@@ -46,7 +49,54 @@ logging.basicConfig(
 log = logging.getLogger("service-agent")
 
 # Semaphore to cap concurrent skill executions
-_task_semaphore = threading.Semaphore(MAX_CONCURRENT_TASKS)
+_task_semaphore = threading.Semaphore(MAX_CONCURRENT_SKILLS)
+
+
+# ── Per-caller rate limiting (leaky bucket) ───────────────────────────────────
+
+_CALLER_RE = re.compile(r"^[a-zA-Z0-9_.:-]{1,64}$")
+
+
+class CallerRateLimiter:
+    """Leaky bucket per caller: max capacity tokens, refills at rate/sec."""
+
+    def __init__(self, rate_per_min: int):
+        self.set_limit(rate_per_min)
+        self._buckets: dict[str, tuple[float, float]] = {}
+        self._lock = threading.Lock()
+
+    def set_limit(self, rate_per_min: int):
+        self.capacity = max(1, int(rate_per_min))
+        self.rate = self.capacity / 60.0
+
+    def reset(self):
+        with self._lock:
+            self._buckets.clear()
+
+    def allow(self, caller: str) -> bool:
+        if SKILL_RATE_LIMIT <= 0:
+            return True
+        # Sync capacity if SKILL_RATE_LIMIT was updated dynamically
+        if self.capacity != SKILL_RATE_LIMIT:
+            self.set_limit(SKILL_RATE_LIMIT)
+        now = time.monotonic()
+        raw_key = (caller or "unknown").strip() or "unknown"
+        key = raw_key if _CALLER_RE.match(raw_key) else "invalid-caller"
+        with self._lock:
+            if len(self._buckets) > 10000:
+                self._buckets = {
+                    k: v for k, v in self._buckets.items() if now - v[1] <= 120
+                }
+            tokens, last = self._buckets.get(key, (float(self.capacity), now))
+            tokens = min(float(self.capacity), tokens + (now - last) * self.rate)
+            if tokens < 1.0:
+                self._buckets[key] = (tokens, now)
+                return False
+            self._buckets[key] = (tokens - 1.0, now)
+            return True
+
+
+_caller_limiter = CallerRateLimiter(SKILL_RATE_LIMIT)
 
 # Explicit skill whitelist — populated at startup and on reload.
 # run_skill() validates skill_id against this set before any exec call.
@@ -56,9 +106,17 @@ _skills_lock = threading.Lock()
 
 # ── SQLite usage tracking ─────────────────────────────────────────────────────
 
+def _get_db_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(USAGE_DB, timeout=10.0)
+    conn.execute("PRAGMA busy_timeout=10000")
+    return conn
+
+
 def init_db():
     os.makedirs(os.path.dirname(USAGE_DB) or ".", exist_ok=True)
-    conn = sqlite3.connect(USAGE_DB)
+    conn = _get_db_conn()
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA journal_size_limit=1048576")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS calls (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -71,13 +129,15 @@ def init_db():
             output_len  INTEGER NOT NULL
         )
     """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_caller ON calls (caller)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_calls_skill ON calls (skill)")
     conn.commit()
     conn.close()
 
 
 def record_call(caller: str, skill: str, params: dict,
                 success: bool, duration_ms: int, output_len: int):
-    conn = sqlite3.connect(USAGE_DB)
+    conn = _get_db_conn()
     try:
         conn.execute(
             "INSERT INTO calls (timestamp, caller, skill, params_json, success, duration_ms, output_len) "
@@ -97,10 +157,26 @@ def record_call(caller: str, skill: str, params: dict,
         conn.close()
 
 
-def get_usage_stats() -> dict:
-    conn = sqlite3.connect(USAGE_DB)
+def get_usage_stats(
+    caller: str | None = None,
+    skill: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+) -> dict:
+    conn = _get_db_conn()
     try:
-        rows = conn.execute("""
+        where_clauses = []
+        where_params: list = []
+        if caller:
+            where_clauses.append("caller = ?")
+            where_params.append(caller)
+        if skill:
+            where_clauses.append("skill = ?")
+            where_params.append(skill)
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        skill_rows = conn.execute(f"""
             SELECT skill,
                    COUNT(*)                     AS total_calls,
                    SUM(success)                 AS successful,
@@ -108,20 +184,95 @@ def get_usage_stats() -> dict:
                    SUM(output_len)              AS total_output_bytes,
                    MAX(timestamp)               AS last_called
             FROM calls
+            {where_sql}
             GROUP BY skill
-        """).fetchall()
+            ORDER BY total_calls DESC, skill ASC
+        """, where_params).fetchall()
+
+        caller_rows = conn.execute(f"""
+            SELECT caller,
+                   COUNT(*)                     AS total_calls,
+                   SUM(success)                 AS successful,
+                   AVG(duration_ms)             AS avg_duration_ms,
+                   SUM(output_len)              AS total_output_bytes,
+                   MAX(timestamp)               AS last_called
+            FROM calls
+            {where_sql}
+            GROUP BY caller
+            ORDER BY total_calls DESC, caller ASC
+        """, where_params).fetchall()
+
+        total_calls = conn.execute(
+            f"SELECT COUNT(*) FROM calls {where_sql}", where_params
+        ).fetchone()[0]
+
+        by_skill_all = [
+            {
+                "skill":              r[0],
+                "total_calls":        r[1],
+                "successful":         r[2] or 0,
+                "avg_duration_ms":    round(r[3] or 0, 1),
+                "total_output_bytes": r[4] or 0,
+                "last_called":        r[5],
+            }
+            for r in skill_rows
+        ]
+
+        by_caller_all = [
+            {
+                "caller":             r[0],
+                "total_calls":        r[1],
+                "successful":         r[2] or 0,
+                "avg_duration_ms":    round(r[3] or 0, 1),
+                "total_output_bytes": r[4] or 0,
+                "last_called":        r[5],
+            }
+            for r in caller_rows
+        ]
+
+        safe_offset = max(0, int(offset or 0))
+        if limit is not None:
+            safe_limit = max(1, int(limit))
+            by_skill = by_skill_all[safe_offset:safe_offset + safe_limit]
+            by_caller = by_caller_all[safe_offset:safe_offset + safe_limit]
+        elif safe_offset > 0:
+            by_skill = by_skill_all[safe_offset:]
+            by_caller = by_caller_all[safe_offset:]
+        else:
+            by_skill = by_skill_all
+            by_caller = by_caller_all
+
+        call_limit = max(1, int(limit)) if limit is not None else 100
+        recent_rows = conn.execute(f"""
+            SELECT id, timestamp, caller, skill, success, duration_ms, output_len
+            FROM calls
+            {where_sql}
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?
+        """, [*where_params, call_limit, safe_offset]).fetchall()
+
+        calls_list = [
+            {
+                "id":          r[0],
+                "timestamp":   r[1],
+                "caller":      r[2],
+                "skill":       r[3],
+                "success":     bool(r[4]),
+                "duration_ms": r[5],
+                "output_len":  r[6],
+            }
+            for r in recent_rows
+        ]
+
         return {
-            "by_skill": [
-                {
-                    "skill":              r[0],
-                    "total_calls":        r[1],
-                    "successful":         r[2],
-                    "avg_duration_ms":    round(r[3] or 0, 1),
-                    "total_output_bytes": r[4],
-                    "last_called":        r[5],
-                }
-                for r in rows
-            ]
+            "by_skill":      by_skill,
+            "by_caller":     by_caller,
+            "calls":         calls_list,
+            "total_calls":   total_calls,
+            "total_skills":  len(by_skill_all),
+            "total_callers": len(by_caller_all),
+            "limit":         limit,
+            "offset":        safe_offset,
         }
     finally:
         conn.close()
@@ -386,12 +537,18 @@ def send_json(handler, data: dict, status: int = 200):
     handler.wfile.write(body)
 
 
-def read_body(handler) -> bytes | None:
-    length = int(handler.headers.get("Content-Length", "0"))
+def read_body(handler) -> tuple[bytes | None, int | None]:
+    raw_len = handler.headers.get("Content-Length", "0")
+    try:
+        length = int(raw_len)
+    except (TypeError, ValueError):
+        return None, 400
+    if length < 0:
+        return None, 400
     if length > MAX_BODY_BYTES:
         handler.close_connection = True
-        return None
-    return handler.rfile.read(length) if length else b""
+        return None, 413
+    return (handler.rfile.read(length) if length else b""), None
 
 
 # ── HTTP Handler ──────────────────────────────────────────────────────────────
@@ -408,9 +565,11 @@ class ServiceHandler(BaseHTTPRequestHandler):
 
         if path == "/v1/health":
             send_json(self, {
-                "status":         "ok",
-                "skills_dir":     str(SKILLS_DIR),
-                "max_concurrent": MAX_CONCURRENT_TASKS,
+                "status":                "ok",
+                "skills_dir":            str(SKILLS_DIR),
+                "max_concurrent":        MAX_CONCURRENT_SKILLS,
+                "max_concurrent_skills": MAX_CONCURRENT_SKILLS,
+                "skill_rate_limit":      SKILL_RATE_LIMIT,
             })
             return
 
@@ -423,7 +582,27 @@ class ServiceHandler(BaseHTTPRequestHandler):
             send_json(self, {"skills": list(skills.values()), "count": len(skills)})
 
         elif path == "/v1/usage":
-            send_json(self, get_usage_stats())
+            parsed = urlparse(self.path)
+            qs = parse_qs(parsed.query)
+            caller_filter = qs.get("caller", [None])[0]
+            skill_filter  = qs.get("skill", [None])[0]
+            raw_limit     = qs.get("limit", [None])[0]
+            raw_offset    = qs.get("offset", ["0"])[0]
+            try:
+                limit_val  = int(raw_limit) if raw_limit is not None else None
+                offset_val = int(raw_offset) if raw_offset is not None else 0
+            except ValueError:
+                send_json(self, {"status": "error", "error": "Invalid limit or offset"}, 400)
+                return
+            send_json(
+                self,
+                get_usage_stats(
+                    caller=caller_filter,
+                    skill=skill_filter,
+                    limit=limit_val,
+                    offset=offset_val,
+                ),
+            )
 
         else:
             send_json(self, {"status": "error", "error": "not found"}, 404)
@@ -437,8 +616,11 @@ class ServiceHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/v1/run":
-            raw = read_body(self)
-            if raw is None:
+            raw, err_code = read_body(self)
+            if err_code == 400:
+                send_json(self, {"status": "error", "error": "Invalid Content-Length"}, 400)
+                return
+            if err_code == 413 or raw is None:
                 send_json(self, {"status": "error", "error": "Request body too large"}, 413)
                 return
             try:
@@ -448,8 +630,12 @@ class ServiceHandler(BaseHTTPRequestHandler):
                 return
 
             skill_id = body.get("skill", "").strip()
-            caller   = body.get("caller", "unknown")
+            caller   = str(body.get("caller", "unknown") or "unknown").strip() or "unknown"
             params   = body.get("params", {})
+
+            if not _CALLER_RE.match(caller):
+                send_json(self, {"status": "error", "error": "Invalid caller name"}, 400)
+                return
 
             if not skill_id:
                 send_json(self, {"status": "error", "error": "Missing 'skill' field"}, 400)
@@ -458,6 +644,20 @@ class ServiceHandler(BaseHTTPRequestHandler):
             # Validate skill_id: alphanumeric + dashes/underscores only, no path traversal
             if not re.match(r'^[a-z][a-z0-9_-]{0,63}$', skill_id):
                 send_json(self, {"status": "error", "error": "Invalid skill name"}, 400)
+                return
+
+            # Per-caller rate limiting (protects pool from a runaway bot)
+            if not _caller_limiter.allow(caller):
+                log.warning("Rate limit exceeded for caller=%s skill=%s", caller, skill_id)
+                send_json(
+                    self,
+                    {
+                        "status": "error",
+                        "error": f"Rate limit exceeded for caller '{caller}' ({SKILL_RATE_LIMIT} req/min)",
+                        "caller": caller,
+                    },
+                    429,
+                )
                 return
 
             # Whitelist check: skill must be in ALLOWED_SKILLS (populated at startup)
@@ -479,14 +679,17 @@ class ServiceHandler(BaseHTTPRequestHandler):
 # ── Entry Point ───────────────────────────────────────────────────────────────
 
 def main():
-    log.info(f"Service Agent starting — port={SERVICE_PORT} max_concurrent={MAX_CONCURRENT_TASKS}")
+    log.info(
+        f"Service Agent starting — port={SERVICE_PORT} "
+        f"max_concurrent={MAX_CONCURRENT_SKILLS} rate_limit={SKILL_RATE_LIMIT}/min"
+    )
     log.info(f"Skills dir: {SKILLS_DIR}")
     init_db()
 
     skills_set = reload_skills()   # populates _ALLOWED_SKILLS whitelist
     log.info(f"Loaded {len(skills_set)} skill(s): {', '.join(sorted(skills_set)) or 'none'}")
 
-    server = HTTPServer(("0.0.0.0", SERVICE_PORT), ServiceHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", SERVICE_PORT), ServiceHandler)
     log.info(f"Listening on 0.0.0.0:{SERVICE_PORT}")
     try:
         server.serve_forever()

@@ -33,7 +33,7 @@ provision() {
   # .env для Hermes — из instance .env (отклоняем симлинки; || true защищает от pipefail)
   if [ ! -e "$DIR/hermes_data/.env" ] && [ ! -L "$DIR/hermes_data/.env" ] && [ -f "$DIR/.env" ] && [ ! -L "$DIR/.env" ]; then
     local tg_token tg_users gw ak oai name_upper
-    name_upper=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
+    name_upper=$(echo "$NAME" | tr '[:lower:]-' '[:upper:]_')
     tg_token=$(grep -E '^TELEGRAM_BOT_TOKEN=' "$DIR/.env" | head -1 | cut -d= -f2- || true)
     tg_users=$(grep -E '^TELEGRAM_ALLOWED_USERS=' "$DIR/.env" | head -1 | cut -d= -f2- || true)
     [ -z "$tg_users" ] && tg_users=$(grep -E '^TELEGRAM_ALLOW_FROM=' "$DIR/.env" | head -1 | cut -d= -f2- || true)

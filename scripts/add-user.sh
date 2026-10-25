@@ -41,8 +41,20 @@ fi
 
 TEMPLATE="instances/_template"
 TARGET="instances/$NAME"
+NAME_UPPER=$(echo "$NAME" | tr '[:lower:]-' '[:upper:]_')
 
 [ -d "$TARGET" ] && echo "❌ Инстанс '$NAME' уже существует" && exit 1
+
+for existing_dir in instances/*/; do
+  [ -d "$existing_dir" ] || continue
+  existing_name=$(basename "$existing_dir")
+  [ "$existing_name" = "_template" ] || [ "$existing_name" = "admin" ] && continue
+  existing_upper=$(echo "$existing_name" | tr '[:lower:]-' '[:upper:]_')
+  if [ "$existing_upper" = "$NAME_UPPER" ] && [ "$existing_name" != "$NAME" ]; then
+    echo "❌ Коллизия имени '$NAME' с существующим инстансом '$existing_name' (общий env-суффикс $NAME_UPPER)"
+    exit 1
+  fi
+done
 
 if [ ! -d "$TEMPLATE/workspace" ]; then
   echo "❌ Директория шаблона не найдена: $TEMPLATE/workspace"
@@ -96,7 +108,7 @@ cp "$INSTANCE_WORKSPACE/SOUL.md" "$TARGET/hermes_data/SOUL.md"
 BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 QUOTA_KEY=$(python3 -c "import secrets; print('quota-${NAME}-' + secrets.token_urlsafe(24))")
 GATEWAY_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
+NAME_UPPER=$(echo "$NAME" | tr '[:lower:]-' '[:upper:]_')
 
 # .env инстанса (compose env_file) — ключи для скиллов и брокера
 cat > "$TARGET/.env" << EOF

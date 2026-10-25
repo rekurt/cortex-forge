@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user bootstrap deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview
+.PHONY: add-user remove-user bulk-import fleet-status bootstrap deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview benchmark-1k
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -17,6 +17,19 @@ remove-user:
 bootstrap:
 	@bash scripts/provision-hermes-data.sh
 	@echo "✅ hermes_data готов"
+
+# make bulk-import FILE=users.csv [SHARD_SIZE=100] — массовый онбординг до 1000 сотрудников
+bulk-import:
+	@[ -n "$(FILE)" ] || (echo "❌ FILE= обязателен (CSV или JSON манифест)"; exit 1)
+	@python3 scripts/bulk-users.py import --file "$(FILE)" --shard-size "$${SHARD_SIZE:-100}"
+
+# make fleet-status — сводка по парку инстансов и шардам
+fleet-status:
+	@python3 scripts/bulk-users.py status
+
+# make benchmark-1k — нагрузочный бенчмарк на 1000 конкурентных пользователей
+benchmark-1k:
+	@python3 scripts/benchmark-1000-users.py
 
 # ── Деплой ────────────────────────────────────────────────────────────────
 

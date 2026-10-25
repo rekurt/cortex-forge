@@ -51,21 +51,32 @@ for INST_DIR in "$INSTANCES"/*/; do
     fi
 done
 
-# ─── 3. Контейнеры живы? ───────────────────────────────────────────────────
+# ─── 3. Контейнеры живы? (O(1) docker ps -a для 1000 инстансов) ────────────
+RUNNING_MAP=$(docker ps -a --format '{{.Names}}={{.State}}' 2>/dev/null || true)
+STOPPED_SERVICES=()
+
 for INST_DIR in "$INSTANCES"/*/; do
     NAME=$(basename "$INST_DIR")
     [ "$NAME" = "_template" ] && continue
     [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # admin manages itself
 
     CONTAINER="corp-$NAME"
-    STATUS=$(docker inspect --format '{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "not_found")
+    STATUS=$(echo "$RUNNING_MAP" | grep -E "^${CONTAINER}=" | head -1 | cut -d= -f2- || true)
+    [ -z "$STATUS" ] && STATUS="not_found"
 
     if [ "$STATUS" != "running" ]; then
-        # Пробуем поднять (cd в /infra/ чтобы compose нашёл и base, и override)
-        (cd "$INFRA" && docker compose up -d "assistant-$NAME" 2>&1) || true
-        CHANGES+=("[$NAME] контейнер был '$STATUS' — попытка запуска")
+        STOPPED_SERVICES+=("assistant-$NAME")
+        CHANGES+=("[$NAME] контейнер был '$STATUS' — добавлен в очередь запуска")
     fi
 done
+
+if [ ${#STOPPED_SERVICES[@]} -gt 0 ]; then
+    # Запускаем упавшие сервисы батчами по 50, чтобы не перегрузить демон при 1000 инстансах
+    (
+        cd "$INFRA"
+        printf '%s\n' "${STOPPED_SERVICES[@]}" | xargs -n 50 docker compose up -d 2>&1
+    ) || true
+fi
 
 # ─── Итог ──────────────────────────────────────────────────────────────────
 if [ ${#CHANGES[@]} -eq 0 ]; then

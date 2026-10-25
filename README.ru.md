@@ -305,6 +305,9 @@ make status    # все контейнеры должны быть Up (healthy)
 | Команда | Описание |
 |---|---|
 | `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Онбординг нового сотрудника |
+| `make bulk-import FILE=users.csv [SHARD_SIZE=100]` | Массовый онбординг до 1000 сотрудников с шардированием Compose |
+| `make fleet-status` | Сводка целостности парка инстансов и распределения по шардам |
+| `make benchmark-1k` | Нагрузочный бенчмарк на 1000 конкурентных пользователей (`quota-proxy` + `broker`) |
 | `make remove-user NAME=x` | Удалить инстанс (сначала архивирует воркспейс в `backups/`) |
 | `make bootstrap` | Подготовить `hermes_data/` (`.env`, `config.yaml`, `SOUL.md`, права) для инстансов |
 | `make deploy` | Выполнить `bootstrap`, затем запустить / пересобрать все контейнеры |
@@ -434,6 +437,7 @@ CortexForge/
 │   ├── add-service.sh    # добавить реплику service-agent
 │   └── backup.sh         # бэкап воркспейсов (tar.gz на инстанс)
 ├── docs/
+│   ├── ENTERPRISE_1000_USERS.md # архитектура на 1000 пользователей, шардирование, SSE-квоты, bulk-users
 │   ├── SETUP.md          # руководство по установке на сервер
 │   ├── ONBOARDING.md     # руководство по онбордингу сотрудника
 │   ├── PERSONAS.md       # руководство по созданию персонажей
