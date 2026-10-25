@@ -102,11 +102,19 @@ def run():
                 print(f"    ❌ {mid}: {e}")
         if instance_updated:
             updated.append(instance_dir.name)
-            # Синхронизируем SOUL.md из workspace в hermes_data (~/.hermes/SOUL.md)
+            # Синхронизируем SOUL.md из workspace в hermes_data (~/.hermes/SOUL.md), отклоняя симлинки
             ws_soul = workspace / "SOUL.md"
             hd_soul = instance_dir / "hermes_data" / "SOUL.md"
-            if ws_soul.exists() and hd_soul.parent.exists() and not DRY_RUN:
-                shutil.copyfile(ws_soul, hd_soul)
+            if (
+                not workspace.is_symlink()
+                and not hd_soul.parent.is_symlink()
+                and ws_soul.exists()
+                and not ws_soul.is_symlink()
+                and hd_soul.parent.exists()
+                and not hd_soul.is_symlink()
+                and not DRY_RUN
+            ):
+                shutil.copyfile(ws_soul, hd_soul, follow_symlinks=False)
             # Сбрасываем кеш сессий — иначе агент продолжит работать
             # со старым SOUL.md/AGENTS.md из закешированной истории
             sessions_dir = instance_dir / "hermes_data" / "sessions"

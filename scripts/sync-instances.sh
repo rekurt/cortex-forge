@@ -25,12 +25,12 @@ for INST_DIR in "$INSTANCES"/*/; do
 
     WS="$INSTANCES/$NAME/workspace"
     HD="$INSTANCES/$NAME/hermes_data"
-    [ -d "$WS" ] || continue
+    [ -d "$WS" ] && [ ! -L "$WS" ] || continue
 
-    # SOUL.md: источником истины служит workspace/SOUL.md, Hermes читает hermes_data/SOUL.md
-    if [ -f "$WS/SOUL.md" ] && [ -d "$HD" ]; then
+    # SOUL.md: источником истины служит workspace/SOUL.md, Hermes читает hermes_data/SOUL.md (отклоняем симлинки)
+    if [ -f "$WS/SOUL.md" ] && [ ! -L "$WS/SOUL.md" ] && [ -d "$HD" ] && [ ! -L "$HD" ] && [ ! -L "$HD/SOUL.md" ]; then
         if [ ! -f "$HD/SOUL.md" ] || ! diff -q "$WS/SOUL.md" "$HD/SOUL.md" > /dev/null 2>&1; then
-            cp "$WS/SOUL.md" "$HD/SOUL.md"
+            cp -P "$WS/SOUL.md" "$HD/SOUL.md"
             CHANGES+=("[$NAME] SOUL.md синхронизирован в hermes_data/")
         fi
     fi
@@ -38,7 +38,11 @@ for INST_DIR in "$INSTANCES"/*/; do
     [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Admin свой HEARTBEAT
 
     HB="$WS/HEARTBEAT.md"
-    if [ ! -f "$HB" ]; then
+    if [ -L "$HB" ]; then
+        rm -f "$HB"
+        cp "$HEARTBEAT_REF" "$HB"
+        CHANGES+=("[$NAME] HEARTBEAT.md был симлинком — пересоздан из эталона")
+    elif [ ! -f "$HB" ]; then
         cp "$HEARTBEAT_REF" "$HB"
         CHANGES+=("[$NAME] HEARTBEAT.md отсутствовал — восстановлен")
     elif ! diff -q "$HB" "$HEARTBEAT_REF" > /dev/null 2>&1; then
