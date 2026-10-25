@@ -8,7 +8,7 @@
 
 Помимо общих скиллов (`/shared/skills/`), ты можешь создавать персональные скиллы в своём workspace.
 
-**Где хранятся:** `workspace/skills/` (в контейнере: `/home/node/.openclaw/workspace/skills/`)
+**Где хранятся:** `workspace/skills/` (в контейнере: `/opt/data/workspace/skills/`)
 
 **Как создать личный скилл:**
 

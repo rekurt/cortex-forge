@@ -1,15 +1,17 @@
-FROM ghcr.io/openclaw/openclaw:latest
+FROM nousresearch/hermes-agent:v0.22.5
 
-# ffmpeg — для транскрипции голосовых (openai-whisper-api)
-# mcporter — MCP CLI для вызова внешних инструментов (DaData и др.)
-# tesseract-ocr — распознавание текста на изображениях (OCR)
+# ffmpeg — для транскрипции голосовых (whisper)
+# tesseract-ocr — распознавание текста на изображениях (OCR, rus+eng)
+# nodejs/npm + mcporter — MCP CLI для вызова внешних инструментов (DaData и др.)
 USER root
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ffmpeg \
       tesseract-ocr \
       tesseract-ocr-rus \
-      tesseract-ocr-eng && \
+      tesseract-ocr-eng \
+      nodejs npm && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && \
     npm install -g mcporter
-USER node
+# Пользователь внутри контейнера маппится на этапе запуска
+# через HERMES_UID/HERMES_GID (s6-overlay stage2), USER в конце не ставим.

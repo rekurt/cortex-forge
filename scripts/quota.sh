@@ -6,6 +6,7 @@
 #   bash scripts/quota.sh reset <name> [YYYY-MM]
 
 set -e
+# shellcheck source=/dev/null
 [ -f .env ] && source .env 2>/dev/null || true
 PROXY_URL="${QUOTA_PROXY_URL:-http://quota-proxy:9090}"
 ADMIN_TOKEN="${QUOTA_ADMIN_TOKEN:-changeme}"

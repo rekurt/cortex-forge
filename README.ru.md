@@ -13,7 +13,7 @@
 [![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
 
-CortexForge — экспериментальная песочница AI-ассистентов на базе [OpenClaw](https://github.com/openclaw/openclaw).
+CortexForge — экспериментальная песочница AI-ассистентов на базе [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
 Идея простая: поднять на одном хосте несколько изолированных Telegram-ботов, у каждого — свой workspace, персонаж, квота токенов и inbox.
 
@@ -44,7 +44,7 @@ CortexForge состоит из нескольких небольших серв
 
 | Компонент | Описание |
 |---|---|
-| **OpenClaw-инстансы** | Один admin-инстанс и опциональные сгенерированные user-инстансы |
+| **Hermes-инстансы** | Один admin-инстанс и опциональные сгенерированные user-инстансы |
 | **CLIProxyAPI** | Опциональный OAuth-прокси для Codex/Claude Max-like доступа; хранит OAuth-сессию в Docker volume |
 | **quota-proxy** | Квоты, rate-limit и аудит перед upstream model endpoint |
 | **message-broker** | SQLite-backed inbox/шина сообщений между инстансами |
@@ -61,7 +61,7 @@ CortexForge состоит из нескольких небольших серв
 |---|---|
 | Контекст на инстанс | Отдельные workspace, memory, Telegram token и persona files |
 | Квотирование | `quota-proxy` хранит месячные счётчики в SQLite |
-| Admin control plane | Admin OpenClaw-инстанс монтирует repo как `/infra` и видит Docker |
+| Admin control plane | Admin Hermes-инстанс монтирует repo как `/infra` и видит Docker |
 | Сообщения между ботами | `message-broker` даёт `/send`, `/inbox` и admin inbox views |
 | Skill execution | `service-agent` читает manifests и запускает allowlisted subprocesses |
 
@@ -94,7 +94,7 @@ CortexForge состоит из нескольких небольших серв
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
 │       │             │             │                              │
 │       └─────────────┼─────────────┘                              │
-│                     │  openclaw.json baseUrl=http://quota-proxy  │
+│                     │  config.yaml base_url=http://quota-proxy  │
 │            ┌────────▼─────────┐                                  │
 │            │   quota-proxy    │  corp-internal                   │
 │            │   :9090          │  corp-admin                      │
@@ -123,7 +123,7 @@ CortexForge состоит из нескольких небольших серв
 ### Как проходит запрос
 
 1. Сотрудник отправляет сообщение своему Telegram-боту
-2. OpenClaw внутри контейнера обращается к провайдеру из `openclaw.json`; user template указывает `baseUrl` на `http://quota-proxy:9090`
+2. Hermes внутри контейнера обращается к провайдеру из `config.yaml`; user template указывает `base_url` на `http://quota-proxy:9090`
 3. `quota-proxy` проверяет квоту токенов, обновляет счётчик в SQLite, затем по умолчанию форвардит запрос в CLIProxyAPI (`http://cliproxyapi:8317`) или в direct upstream, если он настроен отдельно
 4. Если квота исчерпана — `quota-proxy` немедленно возвращает HTTP 429, реальный вызов не делается
 
@@ -211,13 +211,15 @@ mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
 chmod 600 instances/admin/.env
 nano instances/admin/.env
+make bootstrap
 ```
 
 Обязательные поля:
 
 ```bash
 TELEGRAM_BOT_TOKEN=0000000000:CHANGE_ME_BOT_TOKEN
-TELEGRAM_ALLOW_FROM=000000000         # Telegram user ID
+TELEGRAM_ALLOWED_USERS=000000000         # Telegram user ID
+HERMES_GATEWAY_TOKEN=<случайные-32-символа> # токен авторизации Hermes gateway
 BROKER_KEY=<то же что BROKER_KEY_ADMIN> # должно совпадать с глобальным .env
 ```
 
@@ -247,7 +249,7 @@ make add-user NAME=user-2 \
 Опционально — заполнить личные токены и настроить персонажа:
 ```bash
 nano instances/user-2/.env               # Яндекс OAuth, GitLab token, etc.
-nano instances/user-2/workspace/SOUL.md  # стиль и характер ассистента
+nano instances/user-2/workspace/SOUL.md  # стиль и характер ассистента (синхронизируется в hermes_data/SOUL.md при make bootstrap / make deploy)
 ```
 
 ### 6. Запустить
@@ -266,9 +268,12 @@ make status    # все контейнеры должны быть Up (healthy)
 | Переменная | Обязательно | Описание |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | ✅ | API-ключ Anthropic для прямого доступа admin-инстанса; сгенерированные инстансы должны ходить через quota keys и `quota-proxy` |
+| `CLIPROXY_API_KEY` | ✅ | Ключ авторизации `quota-proxy` → `cliproxyapi` (`clip-…`) |
 | `QUOTA_ADMIN_TOKEN` | ✅ | Bearer-токен для API управления квотами |
 | `QUOTA_DEFAULT_MONTHLY` | — | Лимит токенов по умолчанию (по умолчанию: `1000000`) |
 | `BROKER_KEY_ADMIN` | ✅ | Ключ admin в брокере |
+| `BROKER_KEY_SERVICE` | ✅ | Ключ service-agent в брокере |
+| `BROKER_KEY_MONITOR` | ✅ | Ключ resource-monitor в брокере |
 | `MONITOR_ADMIN_TOKEN` | ✅ | Bearer-токен для API resource-monitor |
 | `SERVICE_API_KEY` | ✅ | Bearer-токен для service-agent |
 | `ENRICH_PY_PATH` | — | Путь к `enrich.py` на хосте для compliance-скилла |
@@ -281,8 +286,9 @@ make status    # все контейнеры должны быть Up (healthy)
 
 | Переменная | Обязательно | Описание |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | ✅ | Placeholder токена Telegram-бота |
-| `TELEGRAM_ALLOW_FROM` | ✅ | Разрешённые Telegram ID через запятую |
+| `TELEGRAM_BOT_TOKEN` | ✅ | Токен Telegram-бота (переносится в `hermes_data/.env` через `make bootstrap` / `add-user.sh`) |
+| `TELEGRAM_ALLOWED_USERS` | ✅ | Разрешённые Telegram ID через запятую |
+| `HERMES_GATEWAY_TOKEN` | ✅ | Токен авторизации Hermes gateway (генерируется `add-user.sh`) |
 | `BROKER_KEY` | ✅ | Ключ брокера (генерируется `add-user.sh`) |
 | `YANDEX_OAUTH_TOKEN` | — | Яндекс OAuth для почты / Трекера |
 | `YANDEX_CALDAV_URL` | — | CalDAV URL Яндекс Календаря |
@@ -300,7 +306,8 @@ make status    # все контейнеры должны быть Up (healthy)
 |---|---|
 | `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Онбординг нового сотрудника |
 | `make remove-user NAME=x` | Удалить инстанс (сначала архивирует воркспейс в `backups/`) |
-| `make deploy` | Запустить / пересобрать все контейнеры |
+| `make bootstrap` | Подготовить `hermes_data/` (`.env`, `config.yaml`, `SOUL.md`, права) для инстансов |
+| `make deploy` | Выполнить `bootstrap`, затем запустить / пересобрать все контейнеры |
 | `make restart NAME=x` | Перезапустить один инстанс |
 | `make logs NAME=x` | Логи инстанса в реальном времени |
 | `make status` | Статус всех контейнеров |
@@ -421,6 +428,7 @@ CortexForge/
 ├── scripts/
 │   ├── add-user.sh       # онбординг: ключи, копирование шаблона, docker-compose
 │   ├── remove-user.sh    # удаление инстанса с архивом воркспейса
+│   ├── provision-hermes-data.sh # подготовка hermes_data/ (.env, config.yaml, SOUL.md, chown)
 │   ├── quota.sh          # CLI квот (report / reset / set-limit)
 │   ├── monitor.sh        # CLI мониторинга
 │   ├── add-service.sh    # добавить реплику service-agent

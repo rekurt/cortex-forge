@@ -4,14 +4,8 @@ docker-compose.override.yml
 
 # Секреты — никогда в git
 .env
-.anthropic_tokens.json
-.cli-proxy-api/
-Codex-*.json
 instances/*/.env
-instances/*/openclaw.json
-!instances/admin/openclaw.json
-instances/*/openclaw_data/
-**/*.env
+instances/*/hermes_data/
 **/*.key
 **/*.token
 **/*.db
@@ -40,6 +34,10 @@ backups/
 .DS_Store
 Thumbs.db
 
+# Рантайм-директории платформы (локальные, не для git)
+.arkenos/
+.optimus/
+
 # ralphex progress logs
 .ralphex/progress/
 /docs/plans/*
@@ -47,14 +45,16 @@ Thumbs.db
 # Greeting counter state
 shared/skills/corp-greeting/.greeting_counter
 
-# Migration state per instance (local)
+# Migration state per instance (local; template & admin baseline tracked)
 instances/*/.migrations_applied
-instances/*/openclaw_data/.migrations_applied
+instances/*/workspace/.migrations_applied
+!instances/_template/workspace/.migrations_applied
+!instances/admin/workspace/.migrations_applied
 
 # Instance workspace runtime data (not tracked)
 instances/*/workspace/memory/
 instances/*/workspace/MEMORY.md
-instances/*/workspace/.openclaw/
+instances/*/workspace/.hermes/
 instances/*/workspace/.git/
 instances/*/workspace/.gitignore
 instances/*/workspace/notes-vault/

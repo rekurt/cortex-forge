@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview
+.PHONY: add-user remove-user bootstrap deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -13,9 +13,14 @@ remove-user:
 	@[ -n "$(NAME)" ] || (echo "❌ NAME= обязателен"; exit 1)
 	@bash scripts/remove-user.sh "$(NAME)"
 
+# make bootstrap — подготовить hermes_data инстансов (каталоги, .env, SOUL.md, права)
+bootstrap:
+	@bash scripts/provision-hermes-data.sh
+	@echo "✅ hermes_data готов"
+
 # ── Деплой ────────────────────────────────────────────────────────────────
 
-deploy:
+deploy: bootstrap
 	docker compose up -d --build
 	@echo "✅ Все инстансы запущены"
 
@@ -41,15 +46,15 @@ backup:
 
 # ── Безопасность ───────────────────────────────────────────────────────────
 
-# Проверка базовых требований безопасности
+# Проверка базовых требований безопасности (поддержка GNU stat и BSD stat на macOS)
 security-check:
 	@echo "🔒 Проверка безопасности..."
-	@[ -f .env ] && stat -c "%a" .env | grep -qE "^6[04]0$$" \
+	@[ -f .env ] && (stat -c "%a" .env 2>/dev/null || stat -f "%Lp" .env 2>/dev/null) | grep -qE "^6[04]0$$" \
 	  && echo "  ✅ .env: права 600/640" \
 	  || echo "  ❌ .env: исправь права: chmod 600 .env"
 	@find instances -name ".env" | while read f; do \
-	  mode=$$(stat -c "%a" $$f); \
-	  echo $$mode | grep -qE "^6[04]0$$" \
+	  mode=$$(stat -c "%a" "$$f" 2>/dev/null || stat -f "%Lp" "$$f" 2>/dev/null); \
+	  echo "$$mode" | grep -qE "^6[04]0$$" \
 	    && echo "  ✅ $$f: $${mode}" \
 	    || echo "  ❌ $$f: chmod 600 $$f"; \
 	done

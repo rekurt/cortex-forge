@@ -8,7 +8,6 @@ set -euo pipefail
 INFRA="/infra"
 INSTANCES="$INFRA/instances"
 ADMIN_INSTANCE="admin"
-WORKSPACE_PARENT="${WORKSPACE_PARENT:-$INFRA/..}"
 CHANGES=()
 
 # ─── 1. Миграции ────────────────────────────────────────────────────────────
@@ -17,19 +16,33 @@ if echo "$MIGRATE_OUT" | grep -qv "актуален"; then
     CHANGES+=("Миграции: $MIGRATE_OUT")
 fi
 
-# ─── 2. Эталонный HEARTBEAT (берём из шаблона) ────────────────────────────
+# ─── 2. Эталонный HEARTBEAT и синхронизация SOUL.md → hermes_data/ ──────────
 HEARTBEAT_REF="$INSTANCES/_template/workspace/HEARTBEAT.md"
 
 for INST_DIR in "$INSTANCES"/*/; do
     NAME=$(basename "$INST_DIR")
     [ "$NAME" = "_template" ] && continue
+
+    WS="$INSTANCES/$NAME/workspace"
+    HD="$INSTANCES/$NAME/hermes_data"
+    [ -d "$WS" ] && [ ! -L "$WS" ] || continue
+
+    # SOUL.md: источником истины служит workspace/SOUL.md, Hermes читает hermes_data/SOUL.md (отклоняем симлинки)
+    if [ -f "$WS/SOUL.md" ] && [ ! -L "$WS/SOUL.md" ] && [ -d "$HD" ] && [ ! -L "$HD" ] && [ ! -L "$HD/SOUL.md" ]; then
+        if [ ! -f "$HD/SOUL.md" ] || ! diff -q "$WS/SOUL.md" "$HD/SOUL.md" > /dev/null 2>&1; then
+            cp -P "$WS/SOUL.md" "$HD/SOUL.md"
+            CHANGES+=("[$NAME] SOUL.md синхронизирован в hermes_data/")
+        fi
+    fi
+
     [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Admin свой HEARTBEAT
 
-    WS="$WORKSPACE_PARENT/${NAME}-workspace"
-    [ -d "$WS" ] || continue
-
     HB="$WS/HEARTBEAT.md"
-    if [ ! -f "$HB" ]; then
+    if [ -L "$HB" ]; then
+        rm -f "$HB"
+        cp "$HEARTBEAT_REF" "$HB"
+        CHANGES+=("[$NAME] HEARTBEAT.md был симлинком — пересоздан из эталона")
+    elif [ ! -f "$HB" ]; then
         cp "$HEARTBEAT_REF" "$HB"
         CHANGES+=("[$NAME] HEARTBEAT.md отсутствовал — восстановлен")
     elif ! diff -q "$HB" "$HEARTBEAT_REF" > /dev/null 2>&1; then

@@ -7,6 +7,7 @@
 import sys
 import importlib.util
 import pathlib
+import shutil
 import os
 
 REPO_ROOT   = pathlib.Path(__file__).parent.parent
@@ -42,25 +43,11 @@ def mark_applied(workspace, migration_id):
     applied.add(migration_id)
     f.write_text("\n".join(sorted(applied)) + "\n")
 
-def _workspace_parent():
-    """Resolve parent directory containing external workspaces.
-
-    Inside the admin container WORKSPACE_PARENT=/infra-parent.
-    On the host, falls back to REPO_ROOT.parent.
-    """
-    env = os.environ.get("WORKSPACE_PARENT")
-    if env:
-        return pathlib.Path(env)
-    return REPO_ROOT.parent
-
 def _discover_instances():
     """Find instances and their workspace paths.
 
     Primary: instances/<name>/workspace/ (in-repo).
-    Fallback: ../<name>-workspace/ (legacy external convention).
-    Fallback: instances/<name>/openclaw_data/workspace/ (legacy).
     """
-    parent = _workspace_parent()
     result = []
     for d in sorted(INSTANCES.iterdir()):
         if not d.is_dir() or d.name == "_template":
@@ -70,16 +57,6 @@ def _discover_instances():
         if ws.exists():
             result.append((d, ws))
             continue
-        # Legacy: external workspace outside repo
-        ws_name = "admin-workspace" if d.name == "admin" else f"{d.name}-workspace"
-        external_ws = parent / ws_name
-        if external_ws.exists():
-            result.append((d, external_ws))
-            continue
-        # Legacy: workspace inside openclaw_data
-        legacy_ws = d / "openclaw_data" / "workspace"
-        if legacy_ws.exists():
-            result.append((d, legacy_ws))
     return result
 
 def run():
@@ -106,7 +83,11 @@ def run():
         print(f"  [{instance_dir.name}] применяю {len(pending)} миграций:")
         instance_updated = False
         for mig_path in pending:
-            mod = load_migration(mig_path)
+            try:
+                mod = load_migration(mig_path)
+            except Exception as e:
+                print(f"    ❌ {mig_path.stem}: загрузка не удалась — {e}")
+                continue
             mid = mig_path.stem
             desc = getattr(mod, "DESCRIPTION", mid)
             try:
@@ -121,9 +102,22 @@ def run():
                 print(f"    ❌ {mid}: {e}")
         if instance_updated:
             updated.append(instance_dir.name)
+            # Синхронизируем SOUL.md из workspace в hermes_data (~/.hermes/SOUL.md), отклоняя симлинки
+            ws_soul = workspace / "SOUL.md"
+            hd_soul = instance_dir / "hermes_data" / "SOUL.md"
+            if (
+                not workspace.is_symlink()
+                and not hd_soul.parent.is_symlink()
+                and ws_soul.exists()
+                and not ws_soul.is_symlink()
+                and hd_soul.parent.exists()
+                and not hd_soul.is_symlink()
+                and not DRY_RUN
+            ):
+                shutil.copyfile(ws_soul, hd_soul, follow_symlinks=False)
             # Сбрасываем кеш сессий — иначе агент продолжит работать
             # со старым SOUL.md/AGENTS.md из закешированной истории
-            sessions_dir = instance_dir / "openclaw_data" / "agents" / "main" / "sessions"
+            sessions_dir = instance_dir / "hermes_data" / "sessions"
             if sessions_dir.exists() and not DRY_RUN:
                 for f in sessions_dir.glob("*.jsonl"):
                     f.unlink()

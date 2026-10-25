@@ -28,36 +28,51 @@ if [ -n "$TG_ID" ] && ! echo "$TG_ID" | grep -qE '^[0-9]+$'; then
   exit 1
 fi
 
-# Авто-порт: считаем существующие инстансы и берём 18790+N
-if [ -z "$UI_PORT" ]; then
-  INSTANCE_COUNT=$(find instances -mindepth 1 -maxdepth 1 -type d ! -name "_template" ! -name "admin" | wc -l | tr -d ' ')
-  UI_PORT=$((18790 + INSTANCE_COUNT))
+# TG_ID обязателен: пустой allowlist + deny-by-default = бот молча игнорирует всех
+if [ -z "$TG_ID" ]; then
+  echo "❌ TG_ID= обязателен (иначе бот будет глух ко всем)"
+  exit 1
 fi
-TEMPLATE="instances/_template"
-TARGET="instances/$NAME"
 
 if [ "$NAME" = "admin" ]; then
   echo "❌ Имя 'admin' зарезервировано"
   exit 1
 fi
 
+TEMPLATE="instances/_template"
+TARGET="instances/$NAME"
+
 [ -d "$TARGET" ] && echo "❌ Инстанс '$NAME' уже существует" && exit 1
 
-# Проверяем существование директории шаблона
 if [ ! -d "$TEMPLATE/workspace" ]; then
   echo "❌ Директория шаблона не найдена: $TEMPLATE/workspace"
   exit 1
 fi
 
+# Fail-fast до создания файлов: без корневого .env quota-proxy не узнает инстанс
+if [ ! -f ".env" ]; then
+  echo "❌ Корневой .env не найден (сделай cp .env.example .env) — QUOTA_KEY не будет зарегистрирован в quota-proxy"
+  exit 1
+fi
+
+# Авто-порт: первый свободный 18790+N (проверяем занятость в override)
+if [ -z "$UI_PORT" ]; then
+  OVERRIDE_CHECK="docker-compose.override.yml"
+  UI_PORT=18790
+  while grep -q ":${UI_PORT}:9119" "$OVERRIDE_CHECK" 2>/dev/null; do
+    UI_PORT=$((UI_PORT + 1))
+  done
+fi
+
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
-mkdir -p "$TARGET/openclaw_data"
+mkdir -p "$TARGET/hermes_data/ssh"
 
 # Создаём workspace внутри директории инстанса
 INSTANCE_WORKSPACE="$TARGET/workspace"
 if [ ! -d "$INSTANCE_WORKSPACE" ]; then
     cp -r "$TEMPLATE/workspace/" "$INSTANCE_WORKSPACE"
-    rm -rf "$INSTANCE_WORKSPACE/memory" "$INSTANCE_WORKSPACE/.openclaw"
+    rm -rf "$INSTANCE_WORKSPACE/memory"
     echo "  ✅ Workspace создан в instances/$NAME/workspace/"
 fi
 mkdir -p "$INSTANCE_WORKSPACE/skills" "$INSTANCE_WORKSPACE/memory"
@@ -66,7 +81,7 @@ mkdir -p "$INSTANCE_WORKSPACE/skills" "$INSTANCE_WORKSPACE/memory"
 python3 -c "
 import sys, pathlib
 name, full_name, ws = sys.argv[1], sys.argv[2], sys.argv[3]
-for fname in ['USER.md', 'IDENTITY.md']:
+for fname in ['USER.md', 'IDENTITY.md', 'SOUL.md']:
     p = pathlib.Path(ws) / fname
     if p.exists():
         text = p.read_text()
@@ -74,20 +89,18 @@ for fname in ['USER.md', 'IDENTITY.md']:
         p.write_text(text)
 " "$NAME" "$FULL_NAME" "$INSTANCE_WORKSPACE"
 
+# Персона: Hermes читает SOUL.md из ~/.hermes (=/opt/data), копируем после подстановки плейсхолдеров
+cp "$INSTANCE_WORKSPACE/SOUL.md" "$TARGET/hermes_data/SOUL.md"
+
 # Генерируем ключи
 BROKER_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 QUOTA_KEY=$(python3 -c "import secrets; print('quota-${NAME}-' + secrets.token_urlsafe(24))")
 GATEWAY_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
 
-# .env инстанса
+# .env инстанса (compose env_file) — ключи для скиллов и брокера
 cat > "$TARGET/.env" << EOF
 # Секреты инстанса $NAME — НЕ коммитить в git!
-TELEGRAM_BOT_TOKEN=$BOT_TOKEN
-TELEGRAM_ALLOW_FROM=${TG_ID}
-GATEWAY_TOKEN=$GATEWAY_TOKEN
-
-# Broker & Quota
 BROKER_URL=http://message-broker:8080
 BROKER_KEY=$BROKER_KEY
 
@@ -101,31 +114,42 @@ EOF
 
 chmod 600 "$TARGET/.env"
 
-# OpenClaw конфиг — кладём внутрь openclaw_data/ (единственный mount)
-cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw_data/openclaw.json"
-python3 -c "
-import sys, pathlib
-bot_token, tg_id, path = sys.argv[1], sys.argv[2], sys.argv[3]
-p = pathlib.Path(path)
-text = p.read_text()
-text = text.replace('{{BOT_TOKEN}}', bot_token).replace('{{TG_ID}}', tg_id)
-p.write_text(text)
-" "$BOT_TOKEN" "$TG_ID" "$TARGET/openclaw_data/openclaw.json"
+# Hermes конфиг и секреты — кладём в hermes_data/ (маунтится в /opt/data)
+cp "$TEMPLATE/hermes_config.yaml.template" "$TARGET/hermes_data/config.yaml"
+chmod 600 "$TARGET/hermes_data/config.yaml"
 
-# Выставляем владельца — OpenClaw работает от uid 1000 (node).
-# Используем docker alpine для chown, т.к. deploy user может не иметь прав на chown.
-docker run --rm \
-    -v "$(pwd)/$TARGET/openclaw_data:/data1" \
-    -v "$(pwd)/$TARGET/workspace:/data2" \
-    alpine chown -R 1000:1000 /data1 /data2
+cat > "$TARGET/hermes_data/.env" << EOF
+# Секреты Hermes — НЕ коммитить в git!
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+TELEGRAM_ALLOWED_USERS=${TG_ID}
+HERMES_GATEWAY_TOKEN=$GATEWAY_TOKEN
+ANTHROPIC_API_KEY=$QUOTA_KEY
+# OPENAI_API_KEY=   # для whisper — пробрасывается из глобального .env через compose
+EOF
+chmod 600 "$TARGET/hermes_data/.env"
 
-# Добавляем ключи в глобальный .env
-if [ -f ".env" ]; then
-    echo "BROKER_KEY_${NAME_UPPER}=${BROKER_KEY}"  >> .env
-    echo "QUOTA_KEY_${NAME_UPPER}=${QUOTA_KEY}"    >> .env
-    echo "QUOTA_LIMIT_${NAME_UPPER}=1000000"       >> .env  # 1M токенов/мес по умолчанию
-    echo "  ✅ Ключи добавлены в .env"
+# Выставляем владельца — HERMES_UID/HERMES_GID = 1000 (совпадает с chown).
+if chown -R 1000:1000 "$TARGET/hermes_data" "$TARGET/workspace" 2>/dev/null; then
+  :
+elif command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+  docker run --rm \
+      -v "$(pwd)/$TARGET/hermes_data:/data1" \
+      -v "$(pwd)/$TARGET/workspace:/data2" \
+      alpine chown -R 1000:1000 /data1 /data2
+elif sudo -n chown -R 1000:1000 "$TARGET/hermes_data" "$TARGET/workspace" 2>/dev/null; then
+  :
+else
+  echo "  ⚠️  Не удалось выставить chown 1000:1000 (выполни make fix-permissions или make bootstrap под root)"
 fi
+
+# Гарантия завершающего перевода строки перед append в глобальный .env
+[ -s .env ] && [ -n "$(tail -c1 .env)" ] && echo >> .env
+{
+  echo "BROKER_KEY_${NAME_UPPER}=${BROKER_KEY}"
+  echo "QUOTA_KEY_${NAME_UPPER}=${QUOTA_KEY}"
+  echo "QUOTA_LIMIT_${NAME_UPPER}=1000000"  # 1M токенов/мес по умолчанию
+} >> .env
+echo "  ✅ Ключи добавлены в .env"
 
 # Добавляем сервис в docker-compose.override.yml (gitignored — не конфликтует с git pull)
 python3 - "$NAME" "$NAME_UPPER" "$UI_PORT" << 'PYEOF'
@@ -144,20 +168,22 @@ service = f"""
     env_file:
       - instances/{name}/.env
     volumes:
-      - ./instances/{name}/openclaw_data:/home/node/.openclaw
-      - ./instances/{name}/workspace:/home/node/.openclaw/workspace
+      - ./instances/{name}/hermes_data:/opt/data
+      - ./instances/{name}/workspace:/opt/data/workspace
       - ./shared/skills:/shared/skills
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data:ro
     environment:
       - ANTHROPIC_API_KEY=${{{f"QUOTA_KEY_{NAME_UPPER}"}}}
-      - OPENAI_API_KEY=${{OPENAI_API_KEY}}
+      - OPENAI_API_KEY=${{OPENAI_API_KEY:-}}
       - SERVICE_API_KEY=${{SERVICE_API_KEY}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
-      - NODE_OPTIONS=--max-old-space-size=768
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - HERMES_DASHBOARD=1
     ports:
-      - "127.0.0.1:{ui_port}:18789"   # OpenClaw Control UI
+      - "127.0.0.1:{ui_port}:9119"   # Hermes Dashboard
     networks:
       - corp-internal    # quota-proxy + broker (internal)
       - corp-outbound    # Telegram API + внешние вызовы
@@ -181,7 +207,6 @@ service = f"""
 p = pathlib.Path(OVERRIDE)
 if p.exists():
     content = p.read_text()
-    # append before end or after last service
     content = content.rstrip() + "\n" + service
 else:
     content = "services:" + service
@@ -190,12 +215,17 @@ p.write_text(content)
 print(f"  ✅ assistant-{name} добавлен в {OVERRIDE}")
 PYEOF
 
+# Валидация итогового compose (если установлен docker compose)
+if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  docker compose config -q && echo "  ✅ docker compose config валиден"
+fi
+
 echo ""
 echo "✅ Инстанс '$NAME' создан"
 echo "   Квота: 1,000,000 токенов/мес (изменить: make set-limit NAME=$NAME LIMIT=500000)"
-echo "   Control UI: http://localhost:$UI_PORT"
+echo "   Dashboard: http://localhost:$UI_PORT"
 echo ""
 echo "📋 Далее:"
 echo "  1. nano instances/$NAME/.env               — персональные токены"
-echo "  2. nano instances/$NAME/workspace/SOUL.md    — настроить персонажа"
+echo "  2. nano instances/$NAME/workspace/SOUL.md    — настроить персонажа (синхронизируется при make bootstrap / deploy)"
 echo "  3. make deploy"

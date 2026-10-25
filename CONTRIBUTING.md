@@ -48,16 +48,19 @@ Describe the problem you're solving, not just the solution.
 
 ```bash
 git clone https://github.com/example-org/cortex-forge.git
-cd CortexForge
+cd cortex-forge
 
 # Global config
 cp .env.example .env
+chmod 600 .env
 # Edit .env: set ANTHROPIC_API_KEY and other tokens
 
 # Admin instance (required)
 mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
-# Edit instances/admin/.env: set TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOW_FROM
+chmod 600 instances/admin/.env
+# Edit instances/admin/.env: set TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS, HERMES_GATEWAY_TOKEN
+make bootstrap
 
 # Launch
 make deploy
@@ -80,8 +83,7 @@ make security-check
 ### Running tests
 
 ```bash
-# Tests are being added — see open issues tagged 'tests'
-# pytest tests/ -v
+python3 -m unittest discover tests/ -v
 ```
 
 ### Adding a skill to service-agent
@@ -94,7 +96,7 @@ make security-check
    # ... do work ...
    print(json.dumps({"result": "done"}))
    ```
-3. Add `skills.json` manifest (see `compliance/skills.json` as reference)
+3. Add `skills.json` manifest (see `service-agent/skills/compliance/skills.json` as reference)
 4. Rebuild: `docker compose build assistant-service`
 
 ---
@@ -141,4 +143,4 @@ PRs are merged via **squash merge** to keep `master` history clean.
 
 **Do not open a public issue for security vulnerabilities.**
 
-See [SECURITY.md](SECURITY.md) for responsible disclosure instructions.
+See [docs/SECURITY.md](docs/SECURITY.md) for responsible disclosure instructions.

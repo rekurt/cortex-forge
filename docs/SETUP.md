@@ -32,8 +32,8 @@ docker compose version    # Docker Compose version 2.x
 ## 2. Клонирование репозитория
 
 ```bash
-git clone https://github.com/example-org/cortex-forge.git /opt/CortexForge
-cd /opt/CortexForge
+git clone https://github.com/example-org/cortex-forge.git /opt/cortex-forge
+cd /opt/cortex-forge
 ```
 
 ---
@@ -50,37 +50,44 @@ nano .env
 
 | Ключ | Описание |
 |---|---|
-| `ANTHROPIC_API_KEY` | API-ключ Anthropic (`sk-ant-…`) |
+| `ANTHROPIC_API_KEY` | API-ключ Anthropic (`sk-ant-…`), обязателен для admin |
+| `CLIPROXY_API_KEY` | Ключ авторизации quota-proxy → CLIProxyAPI (`clip-…`) |
 | `QUOTA_ADMIN_TOKEN` | Токен управления квотами (мин. 32 символа) |
 | `BROKER_KEY_ADMIN` | Ключ admin-инстанса в брокере |
-| `MONITOR_API_KEY` | Bearer-токен для API resource-monitor |
-| `SERVICE_API_KEY` | Bearer-токен для service-agent |
+| `BROKER_KEY_SERVICE` | Ключ service-agent в брокере |
+| `BROKER_KEY_MONITOR` | Ключ resource-monitor в брокере |
+| `MONITOR_ADMIN_TOKEN` | Bearer-токен для API resource-monitor |
+| `SERVICE_API_KEY` | Bearer-токен для service-agent (`svc-…`) |
 
 Сгенерировать случайные токены:
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+python3 -c "import secrets; print('clip-' + secrets.token_urlsafe(24))"
+python3 -c "import secrets; print('svc-' + secrets.token_urlsafe(24))"
 ```
 
 ---
 
 ## 4. Admin-инстанс (Admin)
 
-Admin-инстанс обязателен — `docker-compose.yml` требует `instances/admin/.env` при старте.
+Admin-инстанс обязателен — `docker-compose.yml` требует `instances/admin/.env` и `instances/admin/hermes_data` при старте.
 
 ```bash
 mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
 chmod 600 instances/admin/.env
 nano instances/admin/.env
+make bootstrap
 ```
 
 Заполнить в `instances/admin/.env`:
 
 | Ключ | Описание |
 |---|---|
-| `TELEGRAM_BOT_TOKEN` | Placeholder токена Telegram-бота Admin |
-| `TELEGRAM_ALLOW_FROM` | Telegram ID администратора |
-| `BROKER_KEY` | То же значение что `BROKER_KEY_ADMIN` в `.env` |
+| `TELEGRAM_BOT_TOKEN` | Токен Telegram-бота Admin |
+| `TELEGRAM_ALLOWED_USERS` | Telegram ID администратора (числовой, через запятую) |
+| `HERMES_GATEWAY_TOKEN` | Токен авторизации Hermes gateway (`secrets.token_urlsafe(32)`) |
+| `BROKER_KEY` | Ключ брокера (в compose перекрывается `BROKER_KEY_ADMIN` из корневого `.env`) |
 
 ---
 
@@ -107,25 +114,26 @@ nano instances/user-2/.env
 ```
 
 Скрипт автоматически:
-- Создаёт `instances/user-2/` из шаблона
-- Генерирует уникальные `BROKER_KEY` и `QUOTA_KEY`
-- Добавляет ключи в глобальный `.env`
-- Выводит блок для `docker-compose.yml`
+- Создаёт `instances/user-2/` (`workspace/` и `hermes_data/`) из шаблона
+- Генерирует уникальные `BROKER_KEY`, `QUOTA_KEY` и `HERMES_GATEWAY_TOKEN`
+- Добавляет ключи в глобальный `.env` и `instances/user-2/hermes_data/.env`
+- Дописывает сервис `assistant-user-2` в `docker-compose.override.yml`
 
 ---
 
 ## 7. Деплой
 
 ```bash
-make deploy
+make deploy          # запускает make bootstrap + docker compose up -d --build
 ```
 
 Проверка:
 
 ```bash
-make status          # все контейнеры Up (healthy)
-make quota-report    # должно показать инстансы с 0 токенов
-make monitor         # метрики CPU/RAM/диска
+make status                  # все контейнеры Up (healthy)
+make quota-report            # должно показать инстансы с 0 токенов
+make monitor                 # метрики CPU/RAM/диска
+curl -sI http://127.0.0.1:18789  # Hermes Dashboard (admin)
 ```
 
 ---
@@ -135,23 +143,23 @@ make monitor         # метрики CPU/RAM/диска
 ```bash
 cat > /etc/systemd/system/cortexforge.service << 'EOF'
 [Unit]
-Description=Corp Assistant
+Description=CortexForge Assistant Infrastructure
 After=docker.service
 Requires=docker.service
 
 [Service]
-WorkingDirectory=/opt/CortexForge
-ExecStart=docker compose up
-ExecStop=docker compose down
-Restart=on-failure
-RestartSec=10
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/cortex-forge
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now CortexForge
+systemctl enable --now cortexforge.service
 ```
 
 ---
@@ -160,7 +168,7 @@ systemctl enable --now CortexForge
 
 ```bash
 # Ежедневно в 2:00
-echo "0 2 * * * root cd /opt/CortexForge && make backup >> /var/log/cortexforge-backup.log 2>&1" \
+echo "0 2 * * * root cd /opt/cortex-forge && make backup >> /var/log/cortexforge-backup.log 2>&1" \
   >> /etc/cron.d/cortexforge
 ```
 
@@ -171,7 +179,7 @@ echo "0 2 * * * root cd /opt/CortexForge && make backup >> /var/log/cortexforge-
 ## Обновление
 
 ```bash
-cd /opt/CortexForge
+cd /opt/cortex-forge
 git pull origin master
 make deploy    # пересобирает изменившиеся образы, перезапускает
 ```
@@ -183,9 +191,10 @@ make deploy    # пересобирает изменившиеся образы,
 ## Диагностика
 
 ```bash
-make status                          # статус всех контейнеров
-make logs NAME=quota-proxy           # логи конкретного сервиса
-make monitor                         # метрики ресурсов
-make monitor-alerts                  # активные алерты
-docker compose exec corp-admin bash  # shell в admin-контейнер
+make status                                    # статус всех контейнеров
+docker compose logs -f quota-proxy             # логи инфраструктурного сервиса
+make logs NAME=admin                           # логи конкретного ассистента (assistant-admin)
+make monitor                                   # метрики ресурсов
+make monitor-alerts                            # активные алерты
+docker compose exec assistant-admin bash       # shell в admin-контейнер
 ```

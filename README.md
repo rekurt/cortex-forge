@@ -13,7 +13,7 @@
 [![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-CortexForge is an experimental AI-assistant infrastructure sandbox built on [OpenClaw](https://github.com/openclaw/openclaw).
+CortexForge is an experimental AI-assistant infrastructure sandbox built on [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
 [Project website](https://rekurt.github.io/cortex-forge/) · [All projects by rekurt](https://rekurt.github.io/projects/)
 
@@ -46,7 +46,7 @@ CortexForge is split into a few small services:
 
 | Component | Description |
 |---|---|
-| **OpenClaw instances** | One admin instance plus optional generated user instances |
+| **Hermes instances** | One admin instance plus optional generated user instances |
 | **CLIProxyAPI** | Optional OAuth proxy for Codex/Claude Max style access; stores its own OAuth session in a Docker volume |
 | **quota-proxy** | Quota, rate-limit and audit proxy in front of the upstream model endpoint |
 | **message-broker** | SQLite-backed inbox/message bus between instances |
@@ -63,7 +63,7 @@ The project started as a playful way to see what an "AI office full of little pe
 |---|---|
 | Per-instance context | Separate workspace, memory, Telegram token, and persona files |
 | Quota accounting | `quota-proxy` stores monthly counters in SQLite |
-| Admin control plane | Admin OpenClaw instance mounts the repo as `/infra` and can inspect Docker |
+| Admin control plane | Admin Hermes instance mounts the repo as `/infra` and can inspect Docker |
 | Bot-to-bot messaging | `message-broker` exposes `/send`, `/inbox`, and admin inbox views |
 | Skill execution | `service-agent` loads skill manifests and runs allowlisted subprocesses |
 
@@ -96,7 +96,7 @@ The project started as a playful way to see what an "AI office full of little pe
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
 │       │             │             │                              │
 │       └─────────────┼─────────────┘                              │
-│                     │  openclaw.json baseUrl=http://quota-proxy  │
+│                     │  config.yaml base_url=http://quota-proxy  │
 │            ┌────────▼─────────┐                                  │
 │            │  CortexForge     │  corp-internal                   │
 │            │  Proxy :9090     │  corp-admin                      │
@@ -125,7 +125,7 @@ The project started as a playful way to see what an "AI office full of little pe
 ### How a request flows
 
 1. Employee sends a message to their Telegram bot
-2. OpenClaw inside the container receives it and calls the provider configured in `openclaw.json`; user templates point `baseUrl` to `http://quota-proxy:9090`
+2. Hermes inside the container receives it and calls the provider configured in `config.yaml`; user templates point `base_url` to `http://quota-proxy:9090`
 3. `quota-proxy` checks the token quota, updates the counter in SQLite, then forwards the request to CLIProxyAPI by default (`http://cliproxyapi:8317`) or to a direct upstream if configured
 4. If the quota is exceeded, `quota-proxy` returns HTTP 429 immediately — no real API call is made
 
@@ -213,13 +213,15 @@ mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
 chmod 600 instances/admin/.env
 nano instances/admin/.env
+make bootstrap
 ```
 
 Required fields:
 
 ```bash
 TELEGRAM_BOT_TOKEN=0000000000:CHANGE_ME_BOT_TOKEN
-TELEGRAM_ALLOW_FROM=000000000         # your Telegram user ID
+TELEGRAM_ALLOWED_USERS=000000000         # your Telegram user ID
+HERMES_GATEWAY_TOKEN=<random-32-chars>   # Hermes gateway auth token
 BROKER_KEY=<same as BROKER_KEY_ADMIN> # must match the global .env value
 ```
 
@@ -249,7 +251,7 @@ This script automatically:
 Then optionally fill in personal credentials:
 ```bash
 nano instances/user-2/.env               # Yandex OAuth, GitLab token, etc.
-nano instances/user-2/workspace/SOUL.md  # persona style and character
+nano instances/user-2/workspace/SOUL.md  # persona style (synced to hermes_data/SOUL.md on make bootstrap / make deploy)
 ```
 
 ### 6. Launch
@@ -268,9 +270,12 @@ make status    # all containers should be Up (healthy)
 | Variable | Required | Description |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | ✅ | Anthropic API key used by the admin instance directly; generated instances should use quota keys through `quota-proxy` |
+| `CLIPROXY_API_KEY` | ✅ | Auth key between `quota-proxy` and `cliproxyapi` (`clip-…`) |
 | `QUOTA_ADMIN_TOKEN` | ✅ | Bearer token for quota management API |
 | `QUOTA_DEFAULT_MONTHLY` | — | Default token limit per month (default: `1000000`) |
 | `BROKER_KEY_ADMIN` | ✅ | Admin broker key |
+| `BROKER_KEY_SERVICE` | ✅ | Service-agent broker key |
+| `BROKER_KEY_MONITOR` | ✅ | Resource-monitor broker key |
 | `MONITOR_ADMIN_TOKEN` | ✅ | Bearer token for resource-monitor API |
 | `SERVICE_API_KEY` | ✅ | Bearer token for service-agent API |
 | `ENRICH_PY_PATH` | — | Path to `enrich.py` on host for compliance skill |
@@ -283,8 +288,9 @@ make status    # all containers should be Up (healthy)
 
 | Variable | Required | Description |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | ✅ | Telegram bot token placeholder |
-| `TELEGRAM_ALLOW_FROM` | ✅ | Allowed Telegram ID(s), comma-separated |
+| `TELEGRAM_BOT_TOKEN` | ✅ | Telegram bot token placeholder (provisioned into `hermes_data/.env` by `make bootstrap` / `add-user.sh`) |
+| `TELEGRAM_ALLOWED_USERS` | ✅ | Allowed Telegram ID(s), comma-separated |
+| `HERMES_GATEWAY_TOKEN` | ✅ | Hermes gateway auth token (auto-generated by `add-user.sh`) |
 | `BROKER_KEY` | ✅ | Instance broker key (auto-generated by `add-user.sh`) |
 | `YANDEX_OAUTH_TOKEN` | — | Yandex OAuth for mail / Tracker |
 | `YANDEX_CALDAV_URL` | — | Yandex Calendar CalDAV URL |
@@ -302,7 +308,8 @@ make status    # all containers should be Up (healthy)
 |---|---|
 | `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Onboard a new employee |
 | `make remove-user NAME=x` | Remove instance (archives workspace to `backups/` first) |
-| `make deploy` | Start / rebuild all containers |
+| `make bootstrap` | Provision `hermes_data/` (`.env`, `config.yaml`, `SOUL.md`, permissions) for instances |
+| `make deploy` | Run `bootstrap`, then start / rebuild all containers |
 | `make restart NAME=x` | Restart a single instance |
 | `make logs NAME=x` | Tail logs for an instance |
 | `make status` | Status of all containers |
@@ -423,6 +430,7 @@ CortexForge/
 ├── scripts/
 │   ├── add-user.sh       # onboarding: keys, template copy, docker-compose entry
 │   ├── remove-user.sh    # remove instance with workspace archive
+│   ├── provision-hermes-data.sh # bootstrap hermes_data/ (.env, config.yaml, SOUL.md, chown)
 │   ├── quota.sh          # quota CLI (report / reset / set-limit)
 │   ├── monitor.sh        # monitoring CLI
 │   ├── add-service.sh    # add service-agent replica
