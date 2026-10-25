@@ -17,13 +17,14 @@ import socket
 import sqlite3
 import shutil
 import threading
+import concurrent.futures
 import hmac
 import hashlib
 import logging
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from http.client import HTTPConnection
 from datetime import datetime, timezone
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 
 # ── Configuration ────────────────────────────────────────────────────────────
 
@@ -217,9 +218,17 @@ def get_quota_report() -> dict:
 
 # ── SQLite ────────────────────────────────────────────────────────────────────
 
+def _get_db_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(MONITOR_DB, timeout=10.0)
+    conn.execute("PRAGMA busy_timeout=10000")
+    return conn
+
+
 def init_db():
     os.makedirs(os.path.dirname(MONITOR_DB) or ".", exist_ok=True)
-    conn = sqlite3.connect(MONITOR_DB)
+    conn = _get_db_conn()
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA journal_size_limit=1048576")
     conn.execute("""
         CREATE TABLE IF NOT EXISTS snapshots (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -230,6 +239,7 @@ def init_db():
             ram_limit_mb REAL   NOT NULL
         )
     """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_snapshots_container_ts ON snapshots (container, timestamp)")
     conn.commit()
     conn.close()
 
@@ -238,7 +248,7 @@ def write_snapshots(metrics: list):
     """Write a list of metric dicts to SQLite."""
     if not metrics:
         return
-    conn = sqlite3.connect(MONITOR_DB)
+    conn = _get_db_conn()
     try:
         conn.executemany(
             "INSERT INTO snapshots (timestamp, container, cpu_pct, ram_mb, ram_limit_mb) "
@@ -261,14 +271,27 @@ def write_snapshots(metrics: list):
 
 # ── Alerts ────────────────────────────────────────────────────────────────────
 
+def _extract_instance_from_key(key: str) -> str:
+    """Extract instance or container name from alert key (e.g., 'cpu:corp-user-1' -> 'corp-user-1')."""
+    if ":" in key:
+        return key.split(":", 1)[1]
+    return key
+
+
 def send_alert(key: str, message: str):
     """Send alert to broker if cooldown has passed."""
     now = time.time()
+    instance = _extract_instance_from_key(key)
     with _lock:
         last = _active_alerts.get(key, {}).get("fired_at", 0)
         if now - last < ALERT_COOLDOWN:
             return  # still in cooldown
-        _active_alerts[key] = {"fired_at": now, "message": message, "key": key}
+        _active_alerts[key] = {
+            "fired_at": now,
+            "message":  message,
+            "key":      key,
+            "instance": instance,
+        }
 
     log.warning(f"ALERT [{key}]: {message}")
     if not BROKER_KEY_MONITOR:
@@ -342,25 +365,35 @@ def poll_once():
     metrics = []
 
     containers = list_containers()
-    for c in containers:
+
+    def _fetch_one(c: dict) -> dict | None:
         try:
             stats   = get_container_stats(c["id"])
             cpu_pct = parse_cpu_pct(stats)
             ram_mb, ram_limit_mb = parse_ram(stats)
             blkio   = parse_blkio(stats)
 
-            m = {
+            mem_pct = (ram_mb / ram_limit_mb * 100.0) if ram_limit_mb > 0 else 0.0
+            return {
                 "timestamp":    ts,
                 "id":           c["short_id"],
                 "name":         c["name"],
                 "cpu_pct":      round(cpu_pct, 2),
                 "ram_mb":       round(ram_mb, 2),
                 "ram_limit_mb": round(ram_limit_mb, 2),
+                "mem_pct":      round(mem_pct, 2),
                 "blkio":        blkio,
             }
-            metrics.append(m)
         except Exception as e:
             log.warning(f"Stats for {c['name']} failed: {e}")
+            return None
+
+    if containers:
+        max_workers = min(32, len(containers) or 1)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as pool:
+            for m in pool.map(_fetch_one, containers):
+                if m is not None:
+                    metrics.append(m)
 
     disk  = get_disk_usage()
     quota = get_quota_report()
@@ -419,13 +452,66 @@ def send_json(handler, data: dict, status: int = 200):
     handler.wfile.write(body)
 
 
+def _container_mem_pct(c: dict) -> float:
+    """Compute or retrieve memory usage percentage for a container metric dict."""
+    if "mem_pct" in c and c["mem_pct"] is not None:
+        return float(c["mem_pct"])
+    ram_mb = float(c.get("ram_mb", c.get("mem_mb", 0.0)) or 0.0)
+    limit_mb = float(c.get("ram_limit_mb", c.get("mem_limit_mb", 0.0)) or 0.0)
+    if limit_mb > 0:
+        return round(ram_mb / limit_mb * 100.0, 2)
+    return 0.0
+
+
+def _is_container_unhealthy(c: dict) -> bool:
+    """Determine if a container is unhealthy by status flag or resource threshold."""
+    if c.get("healthy") is False or c.get("unhealthy") is True:
+        return True
+    if c.get("status") in ("unhealthy", "dead", "exited", "restarting"):
+        return True
+    if c.get("health") in ("unhealthy", "failing"):
+        return True
+    cpu_pct = float(c.get("cpu_pct", 0.0) or 0.0)
+    mem_pct = _container_mem_pct(c)
+    if cpu_pct > ALERT_CPU_PCT or mem_pct > ALERT_RAM_PCT:
+        return True
+    return False
+
+
+def _alert_matches_instance(alert: dict, instance: str) -> bool:
+    """Check whether an alert dictionary matches the requested instance filter."""
+    target = instance.strip()
+    if not target:
+        return True
+    candidates = {target, f"corp-{target}"}
+    if target.startswith("corp-"):
+        candidates.add(target[5:])
+
+    alert_inst = str(alert.get("instance", "") or alert.get("container", ""))
+    if alert_inst in candidates:
+        return True
+
+    key = str(alert.get("key", ""))
+    if ":" in key and key.split(":", 1)[1] in candidates:
+        return True
+    if any(cand in key for cand in candidates):
+        return True
+
+    msg = str(alert.get("message", ""))
+    if any(cand in msg for cand in candidates):
+        return True
+    return False
+
+
 class MonitorHandler(BaseHTTPRequestHandler):
 
     def log_message(self, fmt, *args):
         log.debug(f"HTTP {fmt % args}")
 
     def do_GET(self):
-        path = self.path.split("?")[0]
+        parsed = urlparse(self.path)
+        path = parsed.path
+        qs = parse_qs(parsed.query)
 
         # /health — no auth required
         if path == "/health":
@@ -436,13 +522,86 @@ class MonitorHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/metrics":
+            search_q   = (qs.get("search", [None])[0] or "").strip().lower()
+            sort_by    = (qs.get("sort", [None])[0] or "").strip().lower()
+            order_q    = (qs.get("order", [None])[0] or "").strip().lower()
+            raw_limit  = qs.get("limit", [None])[0]
+            raw_offset = qs.get("offset", ["0"])[0]
+
+            try:
+                limit_val  = int(raw_limit) if raw_limit is not None else None
+                offset_val = max(0, int(raw_offset)) if raw_offset is not None else 0
+            except ValueError:
+                send_json(self, {"error": "invalid limit or offset"}, 400)
+                return
+
             with _lock:
-                payload = {
-                    "containers": list(_last_metrics.values()),
-                    "disk":       dict(_last_disk),
-                    "quota":      dict(_last_quota),
-                    "polled_at":  datetime.now(timezone.utc).isoformat(),
-                }
+                raw_containers = [dict(c) for c in _last_metrics.values()]
+                disk_copy  = dict(_last_disk)
+                quota_copy = dict(_last_quota)
+
+            # Ensure mem_pct is populated on each container entry
+            for c in raw_containers:
+                if "mem_pct" not in c:
+                    c["mem_pct"] = _container_mem_pct(c)
+
+            # Filter by substring in container name
+            if search_q:
+                filtered = [
+                    c for c in raw_containers
+                    if search_q in str(c.get("name", "")).lower()
+                ]
+            else:
+                filtered = raw_containers
+
+            # Compute summary across all matched containers (pre-pagination)
+            total_containers = len(filtered)
+            total_mem_mb = round(
+                sum(float(c.get("ram_mb", c.get("mem_mb", 0.0)) or 0.0) for c in filtered),
+                2,
+            )
+            avg_cpu_pct = (
+                round(
+                    sum(float(c.get("cpu_pct", 0.0) or 0.0) for c in filtered) / total_containers,
+                    2,
+                )
+                if total_containers > 0
+                else 0.0
+            )
+            unhealthy_count = sum(1 for c in filtered if _is_container_unhealthy(c))
+
+            # Sort containers if requested
+            if sort_by == "mem_pct":
+                reverse = False if order_q == "asc" else True
+                filtered.sort(key=lambda c: (_container_mem_pct(c), c.get("name", "")), reverse=reverse)
+            elif sort_by == "cpu_pct":
+                reverse = False if order_q == "asc" else True
+                filtered.sort(key=lambda c: (float(c.get("cpu_pct", 0.0) or 0.0), c.get("name", "")), reverse=reverse)
+            elif sort_by == "name":
+                reverse = True if order_q == "desc" else False
+                filtered.sort(key=lambda c: str(c.get("name", "")), reverse=reverse)
+
+            # Apply pagination
+            if limit_val is not None:
+                safe_limit = max(1, limit_val)
+                paged_containers = filtered[offset_val:offset_val + safe_limit]
+            elif offset_val > 0:
+                paged_containers = filtered[offset_val:]
+            else:
+                paged_containers = filtered
+
+            payload = {
+                "containers":       paged_containers,
+                "total_containers": total_containers,
+                "summary": {
+                    "total_mem_mb":    total_mem_mb,
+                    "avg_cpu_pct":     avg_cpu_pct,
+                    "unhealthy_count": unhealthy_count,
+                },
+                "disk":             disk_copy,
+                "quota":            quota_copy,
+                "polled_at":        datetime.now(timezone.utc).isoformat(),
+            }
             send_json(self, payload)
 
         elif path.startswith("/metrics/"):
@@ -454,10 +613,43 @@ class MonitorHandler(BaseHTTPRequestHandler):
             else:
                 send_json(self, m)
 
-        elif path == "/alerts/active":
+        elif path in ("/alerts", "/alerts/active"):
+            instance_filter = (qs.get("instance", [None])[0] or "").strip()
+            raw_limit       = qs.get("limit", [None])[0]
+            raw_offset      = qs.get("offset", ["0"])[0]
+
+            try:
+                limit_val  = int(raw_limit) if raw_limit is not None else None
+                offset_val = max(0, int(raw_offset)) if raw_offset is not None else 0
+            except ValueError:
+                send_json(self, {"error": "invalid limit or offset"}, 400)
+                return
+
             with _lock:
-                alerts = list(_active_alerts.values())
-            send_json(self, {"alerts": alerts, "count": len(alerts)})
+                all_alerts = [dict(a) for a in _active_alerts.values()]
+
+            if instance_filter:
+                filtered_alerts = [
+                    a for a in all_alerts
+                    if _alert_matches_instance(a, instance_filter)
+                ]
+            else:
+                filtered_alerts = all_alerts
+
+            total_alerts = len(filtered_alerts)
+            if limit_val is not None:
+                safe_limit = max(1, limit_val)
+                paged_alerts = filtered_alerts[offset_val:offset_val + safe_limit]
+            elif offset_val > 0:
+                paged_alerts = filtered_alerts[offset_val:]
+            else:
+                paged_alerts = filtered_alerts
+
+            send_json(self, {
+                "alerts": paged_alerts,
+                "count":  len(paged_alerts),
+                "total":  total_alerts,
+            })
 
         else:
             send_json(self, {"error": "not found"}, 404)
@@ -473,7 +665,7 @@ def main():
     t = threading.Thread(target=polling_loop, daemon=True, name="poller")
     t.start()
 
-    server = HTTPServer(("0.0.0.0", MONITOR_PORT), MonitorHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", MONITOR_PORT), MonitorHandler)
     log.info(f"HTTP API listening on 0.0.0.0:{MONITOR_PORT}")
     try:
         server.serve_forever()

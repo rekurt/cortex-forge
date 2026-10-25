@@ -43,7 +43,7 @@ rm -rf "$TARGET"
 echo "✅ Инстанс '$NAME' удалён"
 
 # Удаляем ключи из глобального .env
-NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
+NAME_UPPER=$(echo "$NAME" | tr '[:lower:]-' '[:upper:]_')
 if [ -f ".env" ]; then
     # Удаляем строки BROKER_KEY_*, QUOTA_KEY_*, QUOTA_LIMIT_* для этого пользователя
     python3 -c "

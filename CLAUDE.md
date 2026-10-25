@@ -334,7 +334,8 @@ instances/<name>/hermes_data/     # маунт → /opt/data (~/.hermes)
 - **Skills env isolation**: service-agent передаёт subprocess только переменные из `env_vars` в `skills.json` — остальные env не попадают в скилл
 - **SQLite WAL**: все компоненты используют WAL mode + `journal_size_limit=1048576` (1MB); данные переживают рестарт контейнера
 - **Broker sender auth**: отправитель определяется по API-ключу, не по полю body — подменить sender невозможно
-- **Streaming не трекается квотой**: `quota-proxy` считает токены только из non-streaming ответов (`{"usage": {...}}`). SSE-стримы (`text/event-stream`) пропускаются — использование не учитывается
+- **SSE-стримы трекаются квотой**: `quota-proxy` использует потоковый парсер `SSEUsageParser` для учёта токенов в `text/event-stream` (Anthropic `message_start`/`message_delta` и OpenAI `usage` chunks) без буферизации всего ответа в памяти (с защитой 64 KB на строку).
+- **Enterprise 1000-User Scale**: поддерживаются горячая регистрация ключей без рестарта (`POST /quota/register-key`, `POST /admin/register-key`), департаментные квоты (`POST /quota/set-department-limit`), пагинация отчётов и инбоксов, широковещательная рассылка (`POST /broadcast`), массовый провижининг до 1000 инстансов с шардированием (`scripts/bulk-users.py`, `make bulk-import`, `make fleet-status`) и нагрузочный бенчмарк (`scripts/benchmark-1000-users.py`, `make benchmark-1k`). Подробности: `docs/ENTERPRISE_1000_USERS.md`.
 - **Broker per-operation connections**: `broker.py` открывает/закрывает SQLite-соединение на каждую операцию (для WAL mode). `quota-proxy` наоборот — держит один `_conn` на всё время жизни
 - **Memory limits**: admin = 2G, user instances = 1G (`deploy.resources.limits`)
 - **Test import order**: env-переменные **ОБЯЗАТЕЛЬНО** ставить до `import` тестируемого модуля — модули читают env при импорте, не при вызове

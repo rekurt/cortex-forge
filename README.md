@@ -307,6 +307,9 @@ make status    # all containers should be Up (healthy)
 | Command | Description |
 |---|---|
 | `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Onboard a new employee |
+| `make bulk-import FILE=users.csv [SHARD_SIZE=100]` | Bulk-onboard up to 1,000 employees with Compose shard profiles |
+| `make fleet-status` | Fleet integrity summary and shard distribution |
+| `make benchmark-1k` | Run 1,000-concurrent-user load benchmark (`quota-proxy` + `broker`) |
 | `make remove-user NAME=x` | Remove instance (archives workspace to `backups/` first) |
 | `make bootstrap` | Provision `hermes_data/` (`.env`, `config.yaml`, `SOUL.md`, permissions) for instances |
 | `make deploy` | Run `bootstrap`, then start / rebuild all containers |
@@ -436,6 +439,7 @@ CortexForge/
 │   ├── add-service.sh    # add service-agent replica
 │   └── backup.sh         # workspace backup (tar.gz per instance)
 ├── docs/
+│   ├── ENTERPRISE_1000_USERS.md # 1000-user scale architecture, sharding, SSE quotas, bulk provisioning
 │   ├── SETUP.md          # server installation guide
 │   ├── ONBOARDING.md     # employee onboarding guide
 │   ├── PERSONAS.md       # persona creation guide
