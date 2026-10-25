@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# fix-permissions.sh — выставляет правильные права на секретные файлы
+# fix-permissions.sh — выставляет правильные права на секретные файлы и воркспейсы
 set -e
 
 echo "🔒 Исправляем права файлов..."
@@ -12,11 +12,15 @@ for f in instances/*/.env instances/*/hermes_data/config.yaml instances/*/hermes
     [ -f "$f" ] && chmod 600 "$f" && echo "  ✅ $f → 600"
 done
 
-# Hermes-данные — владелец 1000:1000 (HERMES_UID/GID), иначе агент не прочитает свой конфиг
-for d in instances/*/hermes_data; do
+# Hermes-данные и воркспейсы — владелец 1000:1000 (HERMES_UID/GID)
+for d in instances/*/hermes_data instances/*/workspace; do
+    [ "$d" = "instances/_template/workspace" ] && continue
     if [ -d "$d" ]; then
-        chown -R 1000:1000 "$d" 2>/dev/null || sudo chown -R 1000:1000 "$d" || true
-        echo "  ✅ $d → 1000:1000"
+        if chown -R 1000:1000 "$d" 2>/dev/null || sudo -n chown -R 1000:1000 "$d" 2>/dev/null; then
+            echo "  ✅ $d → 1000:1000"
+        else
+            echo "  ⚠️  $d: не удалось выставить chown 1000:1000 (запусти под root или через make bootstrap)"
+        fi
     fi
 done
 

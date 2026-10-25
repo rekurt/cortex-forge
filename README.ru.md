@@ -211,6 +211,7 @@ mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
 chmod 600 instances/admin/.env
 nano instances/admin/.env
+make bootstrap
 ```
 
 Обязательные поля:
@@ -218,6 +219,7 @@ nano instances/admin/.env
 ```bash
 TELEGRAM_BOT_TOKEN=0000000000:CHANGE_ME_BOT_TOKEN
 TELEGRAM_ALLOWED_USERS=000000000         # Telegram user ID
+HERMES_GATEWAY_TOKEN=<случайные-32-символа> # токен авторизации Hermes gateway
 BROKER_KEY=<то же что BROKER_KEY_ADMIN> # должно совпадать с глобальным .env
 ```
 
@@ -300,7 +302,8 @@ make status    # все контейнеры должны быть Up (healthy)
 |---|---|
 | `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Онбординг нового сотрудника |
 | `make remove-user NAME=x` | Удалить инстанс (сначала архивирует воркспейс в `backups/`) |
-| `make deploy` | Запустить / пересобрать все контейнеры |
+| `make bootstrap` | Подготовить `hermes_data/` (`.env`, `config.yaml`, `SOUL.md`, права) для инстансов |
+| `make deploy` | Выполнить `bootstrap`, затем запустить / пересобрать все контейнеры |
 | `make restart NAME=x` | Перезапустить один инстанс |
 | `make logs NAME=x` | Логи инстанса в реальном времени |
 | `make status` | Статус всех контейнеров |
@@ -421,6 +424,7 @@ CortexForge/
 ├── scripts/
 │   ├── add-user.sh       # онбординг: ключи, копирование шаблона, docker-compose
 │   ├── remove-user.sh    # удаление инстанса с архивом воркспейса
+│   ├── provision-hermes-data.sh # подготовка hermes_data/ (.env, config.yaml, SOUL.md, chown)
 │   ├── quota.sh          # CLI квот (report / reset / set-limit)
 │   ├── monitor.sh        # CLI мониторинга
 │   ├── add-service.sh    # добавить реплику service-agent

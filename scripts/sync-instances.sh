@@ -16,16 +16,26 @@ if echo "$MIGRATE_OUT" | grep -qv "актуален"; then
     CHANGES+=("Миграции: $MIGRATE_OUT")
 fi
 
-# ─── 2. Эталонный HEARTBEAT (берём из шаблона) ────────────────────────────
+# ─── 2. Эталонный HEARTBEAT и синхронизация SOUL.md → hermes_data/ ──────────
 HEARTBEAT_REF="$INSTANCES/_template/workspace/HEARTBEAT.md"
 
 for INST_DIR in "$INSTANCES"/*/; do
     NAME=$(basename "$INST_DIR")
     [ "$NAME" = "_template" ] && continue
-    [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Admin свой HEARTBEAT
 
     WS="$INSTANCES/$NAME/workspace"
+    HD="$INSTANCES/$NAME/hermes_data"
     [ -d "$WS" ] || continue
+
+    # SOUL.md: источником истины служит workspace/SOUL.md, Hermes читает hermes_data/SOUL.md
+    if [ -f "$WS/SOUL.md" ] && [ -d "$HD" ]; then
+        if [ ! -f "$HD/SOUL.md" ] || ! diff -q "$WS/SOUL.md" "$HD/SOUL.md" > /dev/null 2>&1; then
+            cp "$WS/SOUL.md" "$HD/SOUL.md"
+            CHANGES+=("[$NAME] SOUL.md синхронизирован в hermes_data/")
+        fi
+    fi
+
+    [ "$NAME" = "$ADMIN_INSTANCE" ] && continue  # у Admin свой HEARTBEAT
 
     HB="$WS/HEARTBEAT.md"
     if [ ! -f "$HB" ]; then

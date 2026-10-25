@@ -213,6 +213,7 @@ mkdir -p instances/admin
 cp instances/.env.example instances/admin/.env
 chmod 600 instances/admin/.env
 nano instances/admin/.env
+make bootstrap
 ```
 
 Required fields:
@@ -220,6 +221,7 @@ Required fields:
 ```bash
 TELEGRAM_BOT_TOKEN=0000000000:CHANGE_ME_BOT_TOKEN
 TELEGRAM_ALLOWED_USERS=000000000         # your Telegram user ID
+HERMES_GATEWAY_TOKEN=<random-32-chars>   # Hermes gateway auth token
 BROKER_KEY=<same as BROKER_KEY_ADMIN> # must match the global .env value
 ```
 
@@ -302,7 +304,8 @@ make status    # all containers should be Up (healthy)
 |---|---|
 | `make add-user NAME=x BOT_TOKEN=y TG_ID=z` | Onboard a new employee |
 | `make remove-user NAME=x` | Remove instance (archives workspace to `backups/` first) |
-| `make deploy` | Start / rebuild all containers |
+| `make bootstrap` | Provision `hermes_data/` (`.env`, `config.yaml`, `SOUL.md`, permissions) for instances |
+| `make deploy` | Run `bootstrap`, then start / rebuild all containers |
 | `make restart NAME=x` | Restart a single instance |
 | `make logs NAME=x` | Tail logs for an instance |
 | `make status` | Status of all containers |
@@ -423,6 +426,7 @@ CortexForge/
 ├── scripts/
 │   ├── add-user.sh       # onboarding: keys, template copy, docker-compose entry
 │   ├── remove-user.sh    # remove instance with workspace archive
+│   ├── provision-hermes-data.sh # bootstrap hermes_data/ (.env, config.yaml, SOUL.md, chown)
 │   ├── quota.sh          # quota CLI (report / reset / set-limit)
 │   ├── monitor.sh        # monitoring CLI
 │   ├── add-service.sh    # add service-agent replica

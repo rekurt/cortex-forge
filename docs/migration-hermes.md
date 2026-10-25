@@ -111,27 +111,42 @@ instances/<name>/
 Big-bang без импорта данных: откат = **повторный fresh-install на старой версии**.
 `git checkout <прошлый тег> && docker compose up -d` поднимает старый код, но старые
 `openclaw_data/` удалены — инстансы нужно пересоздать через `make add-user` с теми же
-`BOT_TOKEN`/`TG_ID` (см. §8, шаг 1 — токены сохраняются до wipe). Квоты в quota-proxy
+`BOT_TOKEN`/`TG_ID` (поэтому токены ботов должны храниться во внешнем менеджере секретов,
+а не только на сервере — бэкапы `.env`-файлы не включают). Квоты в quota-proxy
 (SQLite) не зависят от агента и остаются.
 
 ## 8. Runbook деплоя на VPS
 
-1. **Сохранить токены ДО wipe** — иначе Telegram-боты не восстановить: со старого хоста
-   забрать `instances/*/.env` и/или `openclaw_data/*/openclaw.json` (оттуда достаются
-   `BOT_TOKEN` и `allowFrom`). Хранить вне репо.
-2. `git fetch && git checkout migrate/hermes` (после ревью — merge в master и pull).
-3. `make bootstrap` — создаёт `instances/*/hermes_data` (+`.env` из старых имён переменных,
-   `SOUL.md`, права 1000:1000).
-4. Пересоздать инстансы: `make add-user NAME=… BOT_TOKEN=… TG_ID=…` (токены из шага 1).
-5. `docker compose build && docker compose up -d`.
-6. Smoke-тест одного инстанса по чек-листу §6 + доп-проверки:
-   - dashboard открывается на `127.0.0.1:<порт>`; если connection refused — dashboard
-     биндится на loopback контейнера (проверить `--host`/config dashboard у Hermes);
-   - интерполяция `${VAR}` в config.yaml работает (`hermes status` внутри контейнера);
-   - фактический layout `hermes_data/sessions/` сверить с exclude в `backup.sh`;
-   - gateway API `8642` — если dashboard-UI ходит к API с хоста, опубликовать порт.
-7. Повторить для остальных инстансов, удалить старые `openclaw_data/` и образы
-   `ghcr.io/openclaw/*`.
+1. **Остановить cron автообновления (`autoupdate.sh`)** на время переключения
+   (`crontab -e` — закомментировать строку `autoupdate.sh`), иначе каждые 5 минут cron
+   будет делать `git pull origin master` и откатывать ветку/контейнеры.
+2. **Сохранить токены во внешний менеджер секретов ДО любых удалений**: со старого хоста
+   забрать `instances/*/.env` и/или `instances/*/openclaw_data/openclaw.json` (`BOT_TOKEN`,
+   `allowFrom`). На самом сервере бэкапы `.env` больше не хранят.
+3. Обновить код: `git fetch && git checkout master && git pull` (после мерджа `migrate/hermes`).
+4. **Мигрировать существующие каталоги инстансов**: выполнить `make bootstrap`
+   (`scripts/provision-hermes-data.sh`). Для каждого существующего `instances/<name>/` скрипт
+   создаст `hermes_data/`, скопирует `config.yaml` из шаблона (для user-инстансов),
+   сгенерирует `hermes_data/.env` (перенеся `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USERS`
+   из старого `TELEGRAM_ALLOW_FROM`, `HERMES_GATEWAY_TOKEN` из `GATEWAY_TOKEN` и строго
+   разделив `ANTHROPIC_API_KEY` для admin vs `QUOTA_KEY_<NAME>` для user-инстансов),
+   синхронизирует `SOUL.md` и выставит владельца `1000:1000`.
+   *(Команда `make add-user` используется только для добавления новых сотрудников, так как
+   отклоняет уже существующие каталоги `instances/<name>`).*
+5. Перегенерировать `docker-compose.override.yml` для пользовательских сервисов под схему
+   Hermes (маунты `hermes_data:/opt/data`, порт `9119`, `HERMES_UID/GID=1000`) либо
+   удалить старые каталоги `instances/<user>` + `override` и пересоздать их через
+   `make add-user NAME=… BOT_TOKEN=… TG_ID=…` из сохранённых на шаге 2 токенов.
+6. Запустить стек: `make deploy` (выполняет `make bootstrap` + `docker compose up -d --build`).
+7. Smoke-тест одного инстанса по чек-листу §6 + обязательные проверки на живом контейнере:
+   - `docker compose exec assistant-admin id` → проверить, что `uid=1000(hermes)` (s6 ремап);
+   - `docker compose exec assistant-admin hermes status` → провайдер авторизован (интерполяция `${VAR}`);
+   - `curl -sI http://127.0.0.1:18789` → dashboard отвечает (если `connection refused`,
+     проверить bind-адрес dashboard внутри контейнера);
+   - сверить фактический путь/формат файлов в `hermes_data/sessions/` с exclude в `backup.sh`.
+8. Удалить старые каталоги `instances/*/openclaw_data/` и образы `ghcr.io/openclaw/*`
+   (**не использовать** `docker system prune --volumes`, чтобы не снести `cliproxyapi-auths`
+   с OAuth-сессией Claude Max). Разморозить cron `autoupdate.sh`.
 
 ## 9. Оценка
 

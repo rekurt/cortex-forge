@@ -7,6 +7,7 @@
 # Из контейнера делаем только commit; push запускается отдельно на хосте.
 
 set -euo pipefail
+umask 077
 
 INFRA="/infra"
 BACKUPS="$INFRA/backups"
@@ -27,20 +28,22 @@ else
     CHANGES+=("git: commit $TIMESTAMP")
 fi
 
-# ─── 2. Архив instances/ ─────────────────────────────────────────────────────
+# ─── 2. Архив instances/ (без сессий, .env-секретов и приватных SSH-ключей) ──
 tar -czf "$ARCHIVE" \
     --exclude="instances/*/hermes_data/sessions/*" \
+    --exclude="instances/*/hermes_data/ssh/*" \
     --exclude="instances/*/.env" \
     --exclude="instances/*/hermes_data/.env" \
     instances/ 2>&1
-chmod 600 "$ARCHIVE"   # в воркспейсах нет секретов, но права — минимальные
+chmod 600 "$ARCHIVE"
 
 SIZE=$(du -sh "$ARCHIVE" | cut -f1)
 CHANGES+=("архив: $ARCHIVE ($SIZE)")
 
 # ─── 3. Ротация — оставляем только последние 48 архивов (~2 суток) ───────────
-ls -t "$BACKUPS"/instances_*.tar.gz 2>/dev/null | tail -n +49 | xargs -r rm -f
-KEPT=$(ls "$BACKUPS"/instances_*.tar.gz 2>/dev/null | wc -l)
+find "$BACKUPS" -maxdepth 1 -name 'instances_*.tar.gz' -type f -print0 2>/dev/null \
+  | xargs -0 ls -t 2>/dev/null | tail -n +49 | xargs -r rm -f
+KEPT=$(find "$BACKUPS" -maxdepth 1 -name 'instances_*.tar.gz' -type f 2>/dev/null | wc -l | tr -d ' ')
 CHANGES+=("ротация: сохранено $KEPT архивов")
 
 # ─── Итог ────────────────────────────────────────────────────────────────────

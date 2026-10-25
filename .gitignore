@@ -45,8 +45,11 @@ Thumbs.db
 # Greeting counter state
 shared/skills/corp-greeting/.greeting_counter
 
-# Migration state per instance (local)
+# Migration state per instance (local; template & admin baseline tracked)
 instances/*/.migrations_applied
+instances/*/workspace/.migrations_applied
+!instances/_template/workspace/.migrations_applied
+!instances/admin/workspace/.migrations_applied
 
 # Instance workspace runtime data (not tracked)
 instances/*/workspace/memory/

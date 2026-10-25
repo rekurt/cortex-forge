@@ -90,7 +90,7 @@ python3 -m pytest tests/test_broker_persistence.py::TestBrokerPersistence::test_
 ### Security checks (required before PRs)
 
 ```bash
-python3 .github/scripts/ai_security_check.py   # 8 AI-specific security rules (Semgrep-like)
+python3 .github/scripts/ai_security_check.py   # 9 AI-specific security rules (Semgrep-like)
 shellcheck scripts/*.sh                          # shell script linting
 make security-check                              # .env-права (600), ключи, gitignore
 ```
@@ -276,7 +276,7 @@ instances/<name>/hermes_data/     # маунт → /opt/data (~/.hermes)
 
 ## CI/CD
 
-- **`security.yml`** — Semgrep, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck + `ai_security_check.py` (8 кастомных правил)
+- **`security.yml`** — Semgrep, CodeQL, Trivy, Gitleaks, Hadolint, ShellCheck + `ai_security_check.py` (9 кастомных правил)
 - **`lint-commits.yml`** — проверка Conventional Commits
 - **`release-please.yml`** — автоматически открывает PR с version bump и обновлением `CHANGELOG.md`
 - Правило: PR нельзя мёрджить с красными security-checks
@@ -323,7 +323,8 @@ instances/<name>/hermes_data/     # маунт → /opt/data (~/.hermes)
 |--------|------------|
 | `scripts/autoupdate.sh` | Cron-скрипт (каждые 5 мин): git pull + rebuild changed |
 | `scripts/sync-instances.sh` | Ежечасный maintenance от admin: миграции, healthcheck |
-| `scripts/fix-permissions.sh` | Восстановить права 600 на .env после git-операций |
+| `scripts/fix-permissions.sh` | Восстановить права 600 на .env и 1000:1000 на hermes_data/workspace |
+| `scripts/provision-hermes-data.sh` | Подготовить `hermes_data/` (каталоги, `.env`, `config.yaml`, `SOUL.md`, права) — вызывается из `make bootstrap` / `make deploy` |
 | `scripts/migrate-instances.py` | Применить миграции ко всем инстансам |
 
 ## Gotchas

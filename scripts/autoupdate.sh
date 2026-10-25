@@ -20,7 +20,7 @@ if ! flock -n 9; then
   exit 0
 fi
 
-cd "$REPO"
+cd "$REPO" || exit 1
 
 log() { echo "$(date -u '+%Y-%m-%dT%H:%M:%SZ') $*" | tee -a "$LOG"; }
 

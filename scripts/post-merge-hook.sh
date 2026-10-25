@@ -23,9 +23,6 @@ if echo "$CHANGED" | grep -qE '(\.gitmodules|shared/skills/)'; then
   git submodule update --init --recursive
 fi
 
-RESTART=""
-REBUILD=""
-
 # Проверяем что изменилось
 echo "$CHANGED" | while read -r f; do
   case "$f" in
@@ -85,6 +82,7 @@ if echo "$RESTART_LIST" | grep -q "user-instances"; then
   echo "  🔁 Обновились shared/skills — перезапускаю пользовательские инстансы..."
   USERS=$($COMPOSE ps --services 2>/dev/null | grep -v -E "^(assistant-admin|quota-proxy|message-broker|resource-monitor|assistant-service)$" | grep "assistant-" || true)
   if [ -n "$USERS" ]; then
+    # shellcheck disable=SC2086
     $COMPOSE restart $USERS 2>&1 | grep -E "(Restarting|Started|error)" || true
   fi
 fi

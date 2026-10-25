@@ -20,7 +20,7 @@ bootstrap:
 
 # ── Деплой ────────────────────────────────────────────────────────────────
 
-deploy:
+deploy: bootstrap
 	docker compose up -d --build
 	@echo "✅ Все инстансы запущены"
 
