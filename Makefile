@@ -46,15 +46,15 @@ backup:
 
 # ── Безопасность ───────────────────────────────────────────────────────────
 
-# Проверка базовых требований безопасности
+# Проверка базовых требований безопасности (поддержка GNU stat и BSD stat на macOS)
 security-check:
 	@echo "🔒 Проверка безопасности..."
-	@[ -f .env ] && stat -c "%a" .env | grep -qE "^6[04]0$$" \
+	@[ -f .env ] && (stat -c "%a" .env 2>/dev/null || stat -f "%Lp" .env 2>/dev/null) | grep -qE "^6[04]0$$" \
 	  && echo "  ✅ .env: права 600/640" \
 	  || echo "  ❌ .env: исправь права: chmod 600 .env"
 	@find instances -name ".env" | while read f; do \
-	  mode=$$(stat -c "%a" $$f); \
-	  echo $$mode | grep -qE "^6[04]0$$" \
+	  mode=$$(stat -c "%a" "$$f" 2>/dev/null || stat -f "%Lp" "$$f" 2>/dev/null); \
+	  echo "$$mode" | grep -qE "^6[04]0$$" \
 	    && echo "  ✅ $$f: $${mode}" \
 	    || echo "  ❌ $$f: chmod 600 $$f"; \
 	done

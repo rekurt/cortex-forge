@@ -31,6 +31,7 @@ echo "$CHANGED" | while read -r f; do
     resource-monitor/*)  echo "resource-monitor" >> /tmp/.cf_rebuild ;;
     service-agent/*)     echo "assistant-service" >> /tmp/.cf_rebuild ;;
     instances/admin/Dockerfile) echo "assistant-admin" >> /tmp/.cf_rebuild ;;
+    instances/Dockerfile.user)  echo "__user_images__" >> /tmp/.cf_rebuild ;;
     docker-compose.yml)  echo "__all__" >> /tmp/.cf_rebuild ;;
   esac
   case "$f" in
@@ -72,6 +73,14 @@ fi
 # Пересборка изменившихся сервисов
 if [ -n "$REBUILD_LIST" ]; then
   for svc in $REBUILD_LIST; do
+    if [ "$svc" = "__user_images__" ]; then
+      USERS=$($COMPOSE ps --services 2>/dev/null | grep -v -E "^(assistant-admin|quota-proxy|message-broker|resource-monitor|assistant-service)$" | grep "assistant-" || true)
+      for usvc in $USERS; do
+        echo "  🔨 Пересобираю $usvc..."
+        $COMPOSE up -d --build "$usvc" 2>&1 | grep -E "(Building|built|Started|Recreated|error)" || true
+      done
+      continue
+    fi
     echo "  🔨 Пересобираю $svc..."
     $COMPOSE up -d --build "$svc" 2>&1 | grep -E "(Building|built|Started|Recreated|error)" || true
   done

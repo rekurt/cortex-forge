@@ -134,6 +134,7 @@ services:
       - /usr/bin/docker:/usr/bin/docker:ro  # docker CLI с хоста
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}   # admin ходит напрямую
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${BROKER_KEY_ADMIN}
       - QUOTA_PROXY_URL=http://quota-proxy:9090

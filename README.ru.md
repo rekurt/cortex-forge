@@ -249,7 +249,7 @@ make add-user NAME=user-2 \
 Опционально — заполнить личные токены и настроить персонажа:
 ```bash
 nano instances/user-2/.env               # Яндекс OAuth, GitLab token, etc.
-nano instances/user-2/workspace/SOUL.md  # стиль и характер ассистента
+nano instances/user-2/workspace/SOUL.md  # стиль и характер ассистента (синхронизируется в hermes_data/SOUL.md при make bootstrap / make deploy)
 ```
 
 ### 6. Запустить
@@ -268,9 +268,12 @@ make status    # все контейнеры должны быть Up (healthy)
 | Переменная | Обязательно | Описание |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | ✅ | API-ключ Anthropic для прямого доступа admin-инстанса; сгенерированные инстансы должны ходить через quota keys и `quota-proxy` |
+| `CLIPROXY_API_KEY` | ✅ | Ключ авторизации `quota-proxy` → `cliproxyapi` (`clip-…`) |
 | `QUOTA_ADMIN_TOKEN` | ✅ | Bearer-токен для API управления квотами |
 | `QUOTA_DEFAULT_MONTHLY` | — | Лимит токенов по умолчанию (по умолчанию: `1000000`) |
 | `BROKER_KEY_ADMIN` | ✅ | Ключ admin в брокере |
+| `BROKER_KEY_SERVICE` | ✅ | Ключ service-agent в брокере |
+| `BROKER_KEY_MONITOR` | ✅ | Ключ resource-monitor в брокере |
 | `MONITOR_ADMIN_TOKEN` | ✅ | Bearer-токен для API resource-monitor |
 | `SERVICE_API_KEY` | ✅ | Bearer-токен для service-agent |
 | `ENRICH_PY_PATH` | — | Путь к `enrich.py` на хосте для compliance-скилла |
@@ -283,8 +286,9 @@ make status    # все контейнеры должны быть Up (healthy)
 
 | Переменная | Обязательно | Описание |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | ✅ | Placeholder токена Telegram-бота |
+| `TELEGRAM_BOT_TOKEN` | ✅ | Токен Telegram-бота (переносится в `hermes_data/.env` через `make bootstrap` / `add-user.sh`) |
 | `TELEGRAM_ALLOWED_USERS` | ✅ | Разрешённые Telegram ID через запятую |
+| `HERMES_GATEWAY_TOKEN` | ✅ | Токен авторизации Hermes gateway (генерируется `add-user.sh`) |
 | `BROKER_KEY` | ✅ | Ключ брокера (генерируется `add-user.sh`) |
 | `YANDEX_OAUTH_TOKEN` | — | Яндекс OAuth для почты / Трекера |
 | `YANDEX_CALDAV_URL` | — | CalDAV URL Яндекс Календаря |
