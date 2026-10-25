@@ -17,7 +17,7 @@ We will credit you in the release notes unless you prefer to stay anonymous.
 ### Scope
 
 In-scope: `quota-proxy`, `broker`, `service-agent`, `resource-monitor`, `scripts/`, Docker networking, auth mechanisms.  
-Out-of-scope: OpenClaw itself, Anthropic API, third-party GitHub Actions.
+Out-of-scope: Hermes itself, Anthropic API, third-party GitHub Actions.
 
 ---
 

@@ -292,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
     def _get_instance(self) -> str | None:
         key = self.headers.get("x-api-key", "")
         if not key:
-            # OpenClaw с ANTHROPIC_BASE_URL может слать Authorization: Bearer
+            # Агент с ANTHROPIC_BASE_URL может слать Authorization: Bearer
             auth = self.headers.get("Authorization", "")
             if auth.startswith("Bearer "):
                 key = auth[7:]

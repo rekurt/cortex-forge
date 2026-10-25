@@ -39,7 +39,7 @@ if [ "$LOCAL" != "$REMOTE" ]; then
   CHANGED=true
 fi
 
-# ── 2. Внешние Docker образы (openclaw:latest и др.) ─────────────────────────
+# ── 2. Внешние Docker образы (hermes-agent и др.) ────────────────────────────
 PULLED=$(docker compose pull --ignore-buildable 2>&1 || true)
 if echo "$PULLED" | grep -q "Pulled"; then
   log "🐳 Новые внешние образы:"

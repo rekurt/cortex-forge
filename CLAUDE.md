@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**CortexForge** — корпоративная AI-инфраструктура на базе [OpenClaw](https://github.com/openclaw/openclaw): каждому сотруднику выдаётся изолированный Telegram-бот с собственной памятью, квотой токенов и персонажем. Разворачивается одной командой на одном сервере через Docker Compose.
+**CortexForge** — корпоративная AI-инфраструктура на базе [Hermes Agent](https://github.com/NousResearch/hermes-agent): каждому сотруднику выдаётся изолированный Telegram-бот с собственной памятью, квотой токенов и персонажем. Разворачивается одной командой на одном сервере через Docker Compose.
 
 ## Commands
 
@@ -160,13 +160,13 @@ python3 scripts/migrate-instances.py --dry-run   # посмотреть что �
 
 Инстансы **никогда** не видят настоящий API-ключ. Цепочка:
 1. `add-user.sh` генерирует `QUOTA_KEY_<NAME>=quota-<name>-<random>` в корневом `.env`
-2. В `docker-compose.override.yml` инстанс получает `ANTHROPIC_API_KEY=${QUOTA_KEY_<NAME>}` — OpenClaw думает, что это обычный API-ключ
-3. `openclaw.json.template` указывает `baseUrl: "http://quota-proxy:9090"` — все запросы идут через прокси
+2. В `docker-compose.override.yml` инстанс получает `ANTHROPIC_API_KEY=${QUOTA_KEY_<NAME>}` — Hermes думает, что это обычный API-ключ
+3. `hermes_config.yaml.template` указывает `base_url: http://quota-proxy:9090` — все запросы идут через прокси
 4. `quota-proxy` хэширует полученный ключ (SHA256), ищет в `_quota_keys`, подставляет настоящий upstream-ключ
 
 ### User instance image
 
-Пользовательские инстансы собираются из `instances/Dockerfile.user` (не напрямую из `ghcr.io/openclaw/openclaw:latest`). Поверх базового образа добавлены: `ffmpeg` (транскрибация аудио), `tesseract-ocr` (русский + английский), `mcporter` (MCP CLI). Admin использует базовый образ напрямую.
+Пользовательские инстансы собираются из `instances/Dockerfile.user` (не напрямую из `nousresearch/hermes-agent:stable`). Поверх базового образа добавлены: `ffmpeg` (транскрибация аудио), `tesseract-ocr` (русский + английский), `mcporter` (MCP CLI). Admin собирается из `instances/admin/Dockerfile` (тот же базовый образ + docker CLI).
 
 ### Service-agent skills
 
@@ -218,7 +218,7 @@ Naming convention: сервис `assistant-<name>`, контейнер `corp-<na
 
 ### Instance workspace structure
 
-Каждый инстанс — OpenClaw-контейнер с workspace:
+Каждый инстанс — Hermes-контейнер с workspace:
 ```
 instances/<name>/workspace/
   SOUL.md           # персонаж и стиль общения
@@ -230,7 +230,10 @@ instances/<name>/workspace/
   HEARTBEAT.md      # задачи для периодических проверок (пустой = skip)
   memory/           # долгосрочная память
   .migrations_applied  # трекинг миграций (gitignored)
-openclaw.json       # конфиг: Telegram-канал + модель
+
+instances/<name>/hermes_data/     # маунт → /opt/data (~/.hermes)
+  config.yaml   # конфиг Hermes: модель (quota-proxy), terminal.cwd
+  .env          # секреты: Telegram, gateway-токен, quota-key
 ```
 
 ### Admin instance (Admin)
@@ -290,10 +293,13 @@ openclaw.json       # конфиг: Telegram-канал + модель
 - `BROKER_KEY_MONITOR` — ключ resource-monitor для отправки алертов в broker
 - `SERVICE_API_KEY` — ключ для авторизации запросов к service-agent API
 
-Переменные инстанса в `instances/<name>/.env`:
-- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOW_FROM`
+Переменные инстанса в `instances/<name>/.env` (compose env_file, для скиллов):
 - `BROKER_KEY` — берётся из корневого `.env`
-- `GATEWAY_TOKEN` — auth-токен OpenClaw web UI (генерируется `add-user.sh`)
+
+Секреты Hermes в `instances/<name>/hermes_data/.env`:
+- `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USERS`
+- `HERMES_GATEWAY_TOKEN` — auth-токен gateway (генерируется `add-user.sh`)
+- `ANTHROPIC_API_KEY` — quota-key для quota-proxy
 
 Пороги алертов resource-monitor (env vars): `ALERT_CPU_PCT` (80%), `ALERT_RAM_PCT` (85%), `ALERT_DISK_PCT` (90%), `ALERT_QUOTA_PCT` (80%), `MONITOR_INTERVAL` (60s).
 
@@ -308,8 +314,8 @@ openclaw.json       # конфиг: Telegram-канал + модель
 | 8317 | cliproxyapi | internal only |
 | 9090 | quota-proxy | `127.0.0.1:9090` |
 | 9091 | resource-monitor | `127.0.0.1:9091` |
-| 18789 | admin OpenClaw UI | `127.0.0.1:18789` |
-| 18790+N | user instance UIs | `127.0.0.1:18790+N` |
+| 18789 | admin Hermes Dashboard (контейнер: 9119) | `127.0.0.1:18789` |
+| 18790+N | user Hermes Dashboards (контейнер: 9119) | `127.0.0.1:18790+N` |
 
 ### Key operational scripts
 
@@ -330,9 +336,9 @@ openclaw.json       # конфиг: Telegram-канал + модель
 - **Broker sender auth**: отправитель определяется по API-ключу, не по полю body — подменить sender невозможно
 - **Streaming не трекается квотой**: `quota-proxy` считает токены только из non-streaming ответов (`{"usage": {...}}`). SSE-стримы (`text/event-stream`) пропускаются — использование не учитывается
 - **Broker per-operation connections**: `broker.py` открывает/закрывает SQLite-соединение на каждую операцию (для WAL mode). `quota-proxy` наоборот — держит один `_conn` на всё время жизни
-- **Node.js heap**: admin = `--max-old-space-size=1536` (1.5 GB), user instances = `768` (768 MB)
+- **Memory limits**: admin = 2G, user instances = 1G (`deploy.resources.limits`)
 - **Test import order**: env-переменные **ОБЯЗАТЕЛЬНО** ставить до `import` тестируемого модуля — модули читают env при импорте, не при вызове
 - **docker-compose.override.yml**: gitignored, содержит все пользовательские инстансы. `add-user.sh` дописывает туда. Базовый `docker-compose.yml` — только инфраструктура + admin
-- **GATEWAY_TOKEN**: генерируется `add-user.sh` для каждого инстанса, используется как auth-токен OpenClaw web UI
+- **HERMES_GATEWAY_TOKEN**: генерируется `add-user.sh` для каждого инстанса, используется как auth-токен Hermes gateway
 - **Migration overrides**: `../overrides/migrations/` — внешние миграции с приоритетом над `migrations/` (совпадение по имени файла)
 - **ai_security_check.py exit codes**: CRITICAL/HIGH = exit 1 (блокирует CI), MEDIUM/LOW = warnings (не блокируют)

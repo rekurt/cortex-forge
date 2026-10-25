@@ -8,9 +8,7 @@ docker-compose.override.yml
 .cli-proxy-api/
 Codex-*.json
 instances/*/.env
-instances/*/openclaw.json
-!instances/admin/openclaw.json
-instances/*/openclaw_data/
+instances/*/hermes_data/
 **/*.env
 **/*.key
 **/*.token
@@ -40,6 +38,10 @@ backups/
 .DS_Store
 Thumbs.db
 
+# Рантайм-директории платформы (локальные, не для git)
+.arkenos/
+.optimus/
+
 # ralphex progress logs
 .ralphex/progress/
 /docs/plans/*
@@ -49,12 +51,11 @@ shared/skills/corp-greeting/.greeting_counter
 
 # Migration state per instance (local)
 instances/*/.migrations_applied
-instances/*/openclaw_data/.migrations_applied
 
 # Instance workspace runtime data (not tracked)
 instances/*/workspace/memory/
 instances/*/workspace/MEMORY.md
-instances/*/workspace/.openclaw/
+instances/*/workspace/.hermes/
 instances/*/workspace/.git/
 instances/*/workspace/.gitignore
 instances/*/workspace/notes-vault/

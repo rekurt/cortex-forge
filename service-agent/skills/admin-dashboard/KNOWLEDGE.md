@@ -9,7 +9,7 @@
 | Переменная | Где живёт | Значение | Кто использует |
 |---|---|---|---|
 | ANTHROPIC_API_KEY (корневой .env) | Только quota-proxy | sk-ant-xxx (реальный ключ) | quota-proxy (admin) / CLIProxyAPI OAuth (остальные через UPSTREAM_URL) |
-| ANTHROPIC_API_KEY (в docker env инстанса) | docker-compose.yml | = QUOTA_KEY_USER_1 (НЕ реальный ключ!) | OpenClaw через openclaw.json |
+| ANTHROPIC_API_KEY (в docker env инстанса) | docker-compose.yml | = QUOTA_KEY_USER_1 (НЕ реальный ключ!) | Hermes через config.yaml |
 | QUOTA_KEY_\<NAME\> | Корневой .env → docker-compose.yml mapping | quota-\<name\>-xxx | Подставляется как ANTHROPIC_API_KEY инстанса |
 | QUOTA_ADMIN_TOKEN | Корневой .env | 32+ символов | Admin API quota-proxy, admin-dashboard |
 | BROKER_KEY_\<NAME\> | Корневой .env | Рандомная строка | Аутентификация в broker |
@@ -18,18 +18,18 @@
 
 ### Как работает quota-proxy (поток запроса)
 
-1. OpenClaw шлёт запрос на baseUrl (http://quota-proxy:9090) с x-api-key = ANTHROPIC_API_KEY (из env = QUOTA_KEY_\*)
+1. Hermes шлёт запрос на baseUrl (http://quota-proxy:9090) с x-api-key = ANTHROPIC_API_KEY (из env = QUOTA_KEY_\*)
 2. quota-proxy хэширует ключ через SHA256
 3. Сравнивает с хэшами QUOTA_KEY_\* из корневого .env (constant-time через hmac.compare_digest)
 4. Если совпал — определяет имя инстанса, проверяет лимит
 5. Форвардит в upstream (по умолчанию CLIProxyAPI — OAuth-прокси для Claude Max; admin ходит напрямую в api.anthropic.com)
 6. Логирует расход токенов в SQLite
 
-### Почему в openclaw.json стоит ANTHROPIC_API_KEY = quota key
+### Почему в config.yaml стоит ANTHROPIC_API_KEY = quota key
 
-- openclaw.json.template содержит `"apiKey": "${ANTHROPIC_API_KEY}"`
+- hermes_config.yaml.template содержит `api_key: ${ANTHROPIC_API_KEY}`
 - Docker Compose маппит: `ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}`
-- OpenClaw видит env-переменную ANTHROPIC_API_KEY, подставляет в apiKey
+- Hermes видит env-переменную ANTHROPIC_API_KEY, подставляет в api_key
 - Результат: запрос идёт на quota-proxy с quota key, proxy подменяет на реальный
 
 ## 2. Сети Docker

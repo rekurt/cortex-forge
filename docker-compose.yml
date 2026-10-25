@@ -112,18 +112,21 @@ services:
   # Подключён к corp-admin (для quota API) + corp-internal (для broker)
   # ════════════════════════════════════════════════════
   assistant-admin:
-    image: ghcr.io/openclaw/openclaw:latest
+    build:
+      context: .
+      dockerfile: instances/admin/Dockerfile
+    image: cortex-forge-admin:latest
     container_name: corp-admin
     restart: unless-stopped
     env_file: instances/admin/.env
     volumes:
-      - ./instances/admin/openclaw_data:/home/node/.openclaw
-      - ./instances/admin/openclaw_data/ssh:/home/node/.ssh
+      - ./instances/admin/hermes_data:/opt/data
+      - ./instances/admin/config.yaml:/opt/data/config.yaml:ro
+      - ./instances/admin/workspace:/opt/data/workspace
+      - ./instances/admin/hermes_data/ssh:/home/hermes/.ssh
       - ./shared/skills:/shared/skills
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data
-      - ./instances/admin/workspace:/home/node/.openclaw/workspace
-      - ./instances/admin/openclaw.json:/home/node/.openclaw/openclaw.json
       # Весь проект (rw) — admin уже имеет ANTHROPIC_API_KEY через environment
       - ./:/infra/
       - ../:/infra-parent/    # доступ к внешним данным
@@ -137,9 +140,11 @@ services:
       - QUOTA_ADMIN_TOKEN=${QUOTA_ADMIN_TOKEN}
       - WORKSPACE_PARENT=/infra-parent           # для sync-instances.sh и migrate-instances.py
       - SERVICE_API_KEY=${SERVICE_API_KEY}
-      - NODE_OPTIONS=--max-old-space-size=1536
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - HERMES_DASHBOARD=1
     ports:
-      - "127.0.0.1:18789:18789"   # OpenClaw Control UI — http://localhost:18789
+      - "127.0.0.1:18789:9119"   # Dashboard — http://localhost:18789
     networks:
       - corp-internal
       - corp-admin

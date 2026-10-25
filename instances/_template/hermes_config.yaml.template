@@ -1,0 +1,24 @@
+# Конфигурация Hermes Agent — шаблон пользовательского инстанса {{NAME}}
+# Маунтится в /opt/data/config.yaml (том hermes_data → ~/.hermes)
+# Секреты лежат рядом в /opt/data/.env:
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS, HERMES_GATEWAY_TOKEN,
+#   ANTHROPIC_API_KEY (= QUOTA_KEY_<NAME> — ключ quota-proxy), OPENAI_API_KEY
+
+model:
+  provider: quota-proxy            # кастомный провайдер — локальный quota-proxy
+  default: claude-sonnet-4-6
+  base_url: http://quota-proxy:9090
+  api_mode: anthropic_messages
+  api_key: ${ANTHROPIC_API_KEY}
+
+# Транскрипция голосовых: STT-провайдер.
+# openai — Whisper API через OPENAI_API_KEY (как раньше);
+# "local" — faster-whisper бесплатно, без ключа.
+voice:
+  stt:
+    provider: openai
+
+terminal:
+  cwd: /opt/data/workspace
+
+timezone: Europe/Moscow

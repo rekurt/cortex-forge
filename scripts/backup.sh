@@ -29,7 +29,7 @@ fi
 
 # ─── 2. Архив instances/ ─────────────────────────────────────────────────────
 tar -czf "$ARCHIVE" \
-    --exclude="instances/*/openclaw_data/agents/main/sessions/*.jsonl" \
+    --exclude="instances/*/hermes_data/sessions/*" \
     instances/ 2>&1
 
 SIZE=$(du -sh "$ARCHIVE" | cut -f1)

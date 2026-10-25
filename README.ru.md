@@ -13,7 +13,7 @@
 [![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
 
-CortexForge — экспериментальная песочница AI-ассистентов на базе [OpenClaw](https://github.com/openclaw/openclaw).
+CortexForge — экспериментальная песочница AI-ассистентов на базе [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
 Идея простая: поднять на одном хосте несколько изолированных Telegram-ботов, у каждого — свой workspace, персонаж, квота токенов и inbox.
 
@@ -44,7 +44,7 @@ CortexForge состоит из нескольких небольших серв
 
 | Компонент | Описание |
 |---|---|
-| **OpenClaw-инстансы** | Один admin-инстанс и опциональные сгенерированные user-инстансы |
+| **Hermes-инстансы** | Один admin-инстанс и опциональные сгенерированные user-инстансы |
 | **CLIProxyAPI** | Опциональный OAuth-прокси для Codex/Claude Max-like доступа; хранит OAuth-сессию в Docker volume |
 | **quota-proxy** | Квоты, rate-limit и аудит перед upstream model endpoint |
 | **message-broker** | SQLite-backed inbox/шина сообщений между инстансами |
@@ -61,7 +61,7 @@ CortexForge состоит из нескольких небольших серв
 |---|---|
 | Контекст на инстанс | Отдельные workspace, memory, Telegram token и persona files |
 | Квотирование | `quota-proxy` хранит месячные счётчики в SQLite |
-| Admin control plane | Admin OpenClaw-инстанс монтирует repo как `/infra` и видит Docker |
+| Admin control plane | Admin Hermes-инстанс монтирует repo как `/infra` и видит Docker |
 | Сообщения между ботами | `message-broker` даёт `/send`, `/inbox` и admin inbox views |
 | Skill execution | `service-agent` читает manifests и запускает allowlisted subprocesses |
 
@@ -94,7 +94,7 @@ CortexForge состоит из нескольких небольших серв
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
 │       │             │             │                              │
 │       └─────────────┼─────────────┘                              │
-│                     │  openclaw.json baseUrl=http://quota-proxy  │
+│                     │  config.yaml base_url=http://quota-proxy  │
 │            ┌────────▼─────────┐                                  │
 │            │   quota-proxy    │  corp-internal                   │
 │            │   :9090          │  corp-admin                      │
@@ -123,7 +123,7 @@ CortexForge состоит из нескольких небольших серв
 ### Как проходит запрос
 
 1. Сотрудник отправляет сообщение своему Telegram-боту
-2. OpenClaw внутри контейнера обращается к провайдеру из `openclaw.json`; user template указывает `baseUrl` на `http://quota-proxy:9090`
+2. Hermes внутри контейнера обращается к провайдеру из `config.yaml`; user template указывает `base_url` на `http://quota-proxy:9090`
 3. `quota-proxy` проверяет квоту токенов, обновляет счётчик в SQLite, затем по умолчанию форвардит запрос в CLIProxyAPI (`http://cliproxyapi:8317`) или в direct upstream, если он настроен отдельно
 4. Если квота исчерпана — `quota-proxy` немедленно возвращает HTTP 429, реальный вызов не делается
 

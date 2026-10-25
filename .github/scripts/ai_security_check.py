@@ -154,7 +154,7 @@ def looks_text(path: pathlib.Path) -> bool:
     return False
 
 def should_skip_secret_path(path: pathlib.Path) -> bool:
-    skip_parts = {".git", ".venv", "__pycache__", "node_modules", "openclaw_data", ".openclaw"}
+    skip_parts = {".git", ".venv", "__pycache__", "node_modules", "hermes_data", ".hermes"}
     return bool(skip_parts.intersection(path.parts))
 
 def check_hardcoded_tokens():

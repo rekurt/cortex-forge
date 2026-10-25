@@ -13,7 +13,7 @@
 [![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-CortexForge is an experimental AI-assistant infrastructure sandbox built on [OpenClaw](https://github.com/openclaw/openclaw).
+CortexForge is an experimental AI-assistant infrastructure sandbox built on [Hermes Agent](https://github.com/NousResearch/hermes-agent).
 
 [Project website](https://rekurt.github.io/cortex-forge/) · [All projects by rekurt](https://rekurt.github.io/projects/)
 
@@ -46,7 +46,7 @@ CortexForge is split into a few small services:
 
 | Component | Description |
 |---|---|
-| **OpenClaw instances** | One admin instance plus optional generated user instances |
+| **Hermes instances** | One admin instance plus optional generated user instances |
 | **CLIProxyAPI** | Optional OAuth proxy for Codex/Claude Max style access; stores its own OAuth session in a Docker volume |
 | **quota-proxy** | Quota, rate-limit and audit proxy in front of the upstream model endpoint |
 | **message-broker** | SQLite-backed inbox/message bus between instances |
@@ -63,7 +63,7 @@ The project started as a playful way to see what an "AI office full of little pe
 |---|---|
 | Per-instance context | Separate workspace, memory, Telegram token, and persona files |
 | Quota accounting | `quota-proxy` stores monthly counters in SQLite |
-| Admin control plane | Admin OpenClaw instance mounts the repo as `/infra` and can inspect Docker |
+| Admin control plane | Admin Hermes instance mounts the repo as `/infra` and can inspect Docker |
 | Bot-to-bot messaging | `message-broker` exposes `/send`, `/inbox`, and admin inbox views |
 | Skill execution | `service-agent` loads skill manifests and runs allowlisted subprocesses |
 
@@ -96,7 +96,7 @@ The project started as a playful way to see what an "AI office full of little pe
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘                       │
 │       │             │             │                              │
 │       └─────────────┼─────────────┘                              │
-│                     │  openclaw.json baseUrl=http://quota-proxy  │
+│                     │  config.yaml base_url=http://quota-proxy  │
 │            ┌────────▼─────────┐                                  │
 │            │  CortexForge     │  corp-internal                   │
 │            │  Proxy :9090     │  corp-admin                      │
@@ -125,7 +125,7 @@ The project started as a playful way to see what an "AI office full of little pe
 ### How a request flows
 
 1. Employee sends a message to their Telegram bot
-2. OpenClaw inside the container receives it and calls the provider configured in `openclaw.json`; user templates point `baseUrl` to `http://quota-proxy:9090`
+2. Hermes inside the container receives it and calls the provider configured in `config.yaml`; user templates point `base_url` to `http://quota-proxy:9090`
 3. `quota-proxy` checks the token quota, updates the counter in SQLite, then forwards the request to CLIProxyAPI by default (`http://cliproxyapi:8317`) or to a direct upstream if configured
 4. If the quota is exceeded, `quota-proxy` returns HTTP 429 immediately — no real API call is made
 

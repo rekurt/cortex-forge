@@ -20,7 +20,7 @@
 ### Компоненты системы
 
 ```
-[OpenClaw Gateway] × N      — по одному AI-боту на каждого сотрудника
+[Hermes Gateway] × N      — по одному AI-боту на каждого сотрудника
 [quota-proxy]               — один корпоративный Anthropic ключ, счётчики токенов
 [message-broker]            — межинстансный мессенджер (изолированные inbox)
 [resource-monitor]          — CPU/RAM/disk метрики
@@ -43,7 +43,7 @@
 
 **Что есть у каждого инстанса:**
 - Собственный Telegram-бот (отдельный токен)
-- Собственный volume с данными: `instances/<name>/openclaw_data/`
+- Собственный volume с данными: `instances/<name>/hermes_data/`
 - Собственный воркспейс: SOUL.md, AGENTS.md, USER.md, MEMORY.md, daily logs, skills
 - Доступ к общим скиллам: `/shared/skills/` (только чтение!)
 - Доступ к брокеру сообщений (только свой inbox)
@@ -65,7 +65,7 @@
 
 ### Воркспейс агента (у каждого инстанса)
 ```
-/home/node/.openclaw/workspace/
+/opt/data/workspace/
   SOUL.md              ← личность (кто я)
   USER.md              ← информация о пользователе
   AGENTS.md            ← протокол работы
@@ -79,7 +79,7 @@
 
 ### История сессий (не трогать без причины!)
 ```
-/home/node/.openclaw/agents/main/sessions/
+/opt/data/sessions/
   sessions.json        ← индекс всех сессий
   <uuid>.jsonl         ← история конкретной сессии (compacted контекст!)
 ```
@@ -92,7 +92,7 @@
   docker-compose.yml        ← главный compose
   .env                      ← секреты проекта
   instances/
-    <name>/openclaw_data/   ← данные инстанса
+    <name>/hermes_data/   ← данные инстанса
     _template/              ← шаблон для новых инстансов
     Dockerfile.user         ← образ для user instances (с ffmpeg)
   shared/skills/            ← общие скиллы (read-only!)
@@ -105,7 +105,7 @@
 
 ### ⚠️ Важно: shared/skills смонтирован :ro
 Скрипты внутри скиллов не могут писать в `/shared/skills/`.
-Если скиллу нужен state-файл (кэш, счётчик) → `/home/node/.openclaw/` или `/tmp/`
+Если скиллу нужен state-файл (кэш, счётчик) → `/opt/data/` или `/tmp/`
 
 ---
 
@@ -123,7 +123,7 @@
 
 **Добавить новый shared скилл:**
 1. Создай `/infra/shared/skills/<name>/SKILL.md` + нужные скрипты
-2. Добавь в таблицу скиллов в шаблоне: `instances/_template/openclaw_data/workspace/AGENTS.md`
+2. Добавь в таблицу скиллов в шаблоне: `instances/_template/workspace/AGENTS.md`
 3. Создай миграцию `migrations/NNN_add_<name>_skill.py` чтобы скилл попал в существующие инстансы
 
 ---
@@ -169,7 +169,7 @@ cd /infra && python3 scripts/migrate-instances.py
 | Переменная | Где живёт | Значение | Кто использует |
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` (в `.env` корня) | Только в quota-proxy | `sk-ant-xxx` (реальный ключ) | quota-proxy для форвардинга |
-| `ANTHROPIC_API_KEY` (в docker env инстанса) | docker-compose.yml | = `QUOTA_KEY_USER_1` (НЕ реальный ключ!) | OpenClaw через openclaw.json |
+| `ANTHROPIC_API_KEY` (в docker env инстанса) | docker-compose.yml | = `QUOTA_KEY_USER_1` (НЕ реальный ключ!) | Hermes через config.yaml |
 | `QUOTA_KEY_USER_1` (в `.env` корня) | docker-compose.yml env mapping | `quota-user-1-xxx` (хэшируется в proxy) | Подставляется как ANTHROPIC_API_KEY |
 | `QUOTA_ADMIN_TOKEN` | Только Admin и quota-proxy | 32+ символов | Admin API quota-proxy |
 | `BROKER_KEY_*` | Broker + каждый инстанс | Рандомная строка (хэшируется в broker) | Аутентификация в мессенджере |
@@ -197,8 +197,8 @@ cd /infra && python3 scripts/migrate-instances.py
 
 | Путь в контейнере | Хост-путь | Права | Кто видит |
 |---|---|---|---|
-| `/home/node/.openclaw/` | `instances/<name>/openclaw_data/` | rw | Свой инстанс |
-| `/home/node/.openclaw/workspace/` | `instances/<name>/workspace/` | rw | Свой инстанс |
+| `/opt/data/` | `instances/<name>/hermes_data/` | rw | Свой инстанс |
+| `/opt/data/workspace/` | `instances/<name>/workspace/` | rw | Свой инстанс |
 | `/shared/skills/` | `shared/skills/` | ro | Все инстансы |
 | `/shared/docs/` | `shared/docs/` | rw | Все инстансы |
 | `/shared/compliance-data/` | `shared/compliance-data/` | ro | Все инстансы |
@@ -217,7 +217,7 @@ cd /infra && python3 scripts/migrate-instances.py
 ### Схема потока запроса
 
 ```
-1. OpenClaw шлёт запрос на baseUrl (http://quota-proxy:9090)
+1. Hermes шлёт запрос на baseUrl (http://quota-proxy:9090)
    с x-api-key = ANTHROPIC_API_KEY (из env = QUOTA_KEY_*)
 2. quota-proxy хэширует ключ через SHA256
 3. Сравнивает с хэшами QUOTA_KEY_* из корневого .env (constant-time через hmac.compare_digest)
@@ -231,9 +231,9 @@ cd /infra && python3 scripts/migrate-instances.py
 
 Это ключевой нюанс, который легко перепутать:
 
-1. `openclaw.json.template` содержит `"apiKey": "${ANTHROPIC_API_KEY}"`
+1. `hermes_config.yaml.template` содержит `api_key: ${ANTHROPIC_API_KEY}`
 2. Docker Compose маппит: `ANTHROPIC_API_KEY=${QUOTA_KEY_USER_1}`
-3. OpenClaw видит env-переменную `ANTHROPIC_API_KEY`, подставляет в apiKey
+3. Hermes видит env-переменную `ANTHROPIC_API_KEY`, подставляет в `api_key`
 4. Результат: запрос идёт на quota-proxy с quota key, proxy подменяет на реальный
 
 **Это значит:** когда ты видишь `ANTHROPIC_API_KEY` в env инстанса — это **НЕ** реальный ключ Anthropic! Это quota-ключ, который quota-proxy распознаёт и подменяет.
@@ -278,8 +278,8 @@ make deploy
 ### Если бот "завис" в старой личности
 ```bash
 # Очистить сессии и перезапустить
-rm -f /infra/instances/<name>/openclaw_data/agents/main/sessions/*.jsonl
-rm -f /infra/instances/<name>/openclaw_data/agents/main/sessions/sessions.json
+rm -f /infra/instances/<name>/hermes_data/sessions/*.jsonl
+rm -f /infra/instances/<name>/hermes_data/sessions/sessions.json
 docker compose restart corp-<name>
 ```
 
@@ -317,7 +317,7 @@ curl -s "http://message-broker:8080/inbox" \
 
 ## ✍️ Write tool — важно про пути
 
-OpenClaw ограничивает `write` только папкой workspace.
+Hermes ограничивает `write` только папкой workspace.
 Чтобы создавать/редактировать файлы проекта — используй пути через `workspace/infra/`:
 
 | Что создать | Путь для write tool |

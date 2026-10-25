@@ -13,7 +13,7 @@ source ~/.secrets/gitlab.env
 
 ```bash
 # Посмотреть события на ближайшие N дней
-python3 /home/user/.openclaw/workspace/calendar.py --days 7
+python3 /opt/data/workspace/calendar.py --days 7
 ```
 
 ## Чтение событий (curl)

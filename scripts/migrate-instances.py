@@ -57,8 +57,6 @@ def _discover_instances():
     """Find instances and their workspace paths.
 
     Primary: instances/<name>/workspace/ (in-repo).
-    Fallback: ../<name>-workspace/ (legacy external convention).
-    Fallback: instances/<name>/openclaw_data/workspace/ (legacy).
     """
     parent = _workspace_parent()
     result = []
@@ -70,16 +68,6 @@ def _discover_instances():
         if ws.exists():
             result.append((d, ws))
             continue
-        # Legacy: external workspace outside repo
-        ws_name = "admin-workspace" if d.name == "admin" else f"{d.name}-workspace"
-        external_ws = parent / ws_name
-        if external_ws.exists():
-            result.append((d, external_ws))
-            continue
-        # Legacy: workspace inside openclaw_data
-        legacy_ws = d / "openclaw_data" / "workspace"
-        if legacy_ws.exists():
-            result.append((d, legacy_ws))
     return result
 
 def run():
@@ -123,7 +111,7 @@ def run():
             updated.append(instance_dir.name)
             # Сбрасываем кеш сессий — иначе агент продолжит работать
             # со старым SOUL.md/AGENTS.md из закешированной истории
-            sessions_dir = instance_dir / "openclaw_data" / "agents" / "main" / "sessions"
+            sessions_dir = instance_dir / "hermes_data" / "sessions"
             if sessions_dir.exists() and not DRY_RUN:
                 for f in sessions_dir.glob("*.jsonl"):
                     f.unlink()

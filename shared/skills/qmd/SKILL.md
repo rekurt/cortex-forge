@@ -63,7 +63,7 @@ Endpoint: `POST http://corp-service:8090/v1/run`
 
 | Scope | Директории |
 |-------|-----------|
-| `workspace` | /home/node/.openclaw/workspace/ (твой workspace) |
+| `workspace` | /opt/data/workspace/ (твой workspace) |
 | `shared` | /shared/docs/ + /shared/skills/ |
 | `skills` | /shared/skills/ only |
 | `all` | Все вышеперечисленные |

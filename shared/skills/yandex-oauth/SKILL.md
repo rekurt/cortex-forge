@@ -34,7 +34,7 @@ source ~/.secrets/gitlab.env
 
 ## Вспомогательные скрипты
 
-Уже готовы в `/home/user/.openclaw/workspace/`:
+Уже готовы в `/opt/data/workspace/`:
 - `calendar.py` — чтение событий CalDAV (`python3 calendar.py --days 7`)
 - `tracker.py` — задачи на меня (`python3 tracker.py`)
 

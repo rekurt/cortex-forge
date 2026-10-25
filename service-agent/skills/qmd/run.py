@@ -6,7 +6,7 @@ Skill для service-agent. Читает JSON из stdin, пишет JSON в std
 Рекурсивный обход директорий с поиском по содержимому .md файлов.
 
 Scopes:
-  workspace — /home/node/.openclaw/workspace/
+  workspace — /opt/data/workspace/
   shared    — /shared/docs/ + /shared/skills/
   skills    — /shared/skills/ only
   all       — всё вышеперечисленное
@@ -21,7 +21,7 @@ import sys
 import time
 
 # Directories per scope (overridable via env for testing)
-_WORKSPACE_DIR = os.environ.get("QMD_WORKSPACE_DIR", "/home/node/.openclaw/workspace/")
+_WORKSPACE_DIR = os.environ.get("QMD_WORKSPACE_DIR", "/opt/data/workspace/")
 _SHARED_DOCS_DIR = os.environ.get("QMD_SHARED_DOCS_DIR", "/shared/docs/")
 _SHARED_SKILLS_DIR = os.environ.get("QMD_SHARED_SKILLS_DIR", "/shared/skills/")
 

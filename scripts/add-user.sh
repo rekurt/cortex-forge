@@ -51,13 +51,13 @@ fi
 
 echo "🚀 Создаём инстанс: $FULL_NAME ($NAME)"
 
-mkdir -p "$TARGET/openclaw_data"
+mkdir -p "$TARGET/hermes_data"
 
 # Создаём workspace внутри директории инстанса
 INSTANCE_WORKSPACE="$TARGET/workspace"
 if [ ! -d "$INSTANCE_WORKSPACE" ]; then
     cp -r "$TEMPLATE/workspace/" "$INSTANCE_WORKSPACE"
-    rm -rf "$INSTANCE_WORKSPACE/memory" "$INSTANCE_WORKSPACE/.openclaw"
+    rm -rf "$INSTANCE_WORKSPACE/memory"
     echo "  ✅ Workspace создан в instances/$NAME/workspace/"
 fi
 mkdir -p "$INSTANCE_WORKSPACE/skills" "$INSTANCE_WORKSPACE/memory"
@@ -80,14 +80,9 @@ QUOTA_KEY=$(python3 -c "import secrets; print('quota-${NAME}-' + secrets.token_u
 GATEWAY_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 NAME_UPPER=$(echo "$NAME" | tr '[:lower:]' '[:upper:]')
 
-# .env инстанса
+# .env инстанса (compose env_file) — ключи для скиллов и брокера
 cat > "$TARGET/.env" << EOF
 # Секреты инстанса $NAME — НЕ коммитить в git!
-TELEGRAM_BOT_TOKEN=$BOT_TOKEN
-TELEGRAM_ALLOW_FROM=${TG_ID}
-GATEWAY_TOKEN=$GATEWAY_TOKEN
-
-# Broker & Quota
 BROKER_URL=http://message-broker:8080
 BROKER_KEY=$BROKER_KEY
 
@@ -101,21 +96,23 @@ EOF
 
 chmod 600 "$TARGET/.env"
 
-# OpenClaw конфиг — кладём внутрь openclaw_data/ (единственный mount)
-cp "$TEMPLATE/openclaw.json.template" "$TARGET/openclaw_data/openclaw.json"
-python3 -c "
-import sys, pathlib
-bot_token, tg_id, path = sys.argv[1], sys.argv[2], sys.argv[3]
-p = pathlib.Path(path)
-text = p.read_text()
-text = text.replace('{{BOT_TOKEN}}', bot_token).replace('{{TG_ID}}', tg_id)
-p.write_text(text)
-" "$BOT_TOKEN" "$TG_ID" "$TARGET/openclaw_data/openclaw.json"
+# Hermes конфиг и секреты — кладём в hermes_data/ (маунтится в /opt/data)
+cp "$TEMPLATE/hermes_config.yaml.template" "$TARGET/hermes_data/config.yaml"
 
-# Выставляем владельца — OpenClaw работает от uid 1000 (node).
+cat > "$TARGET/hermes_data/.env" << EOF
+# Секреты Hermes — НЕ коммитить в git!
+TELEGRAM_BOT_TOKEN=$BOT_TOKEN
+TELEGRAM_ALLOWED_USERS=${TG_ID}
+HERMES_GATEWAY_TOKEN=$GATEWAY_TOKEN
+ANTHROPIC_API_KEY=$QUOTA_KEY
+# OPENAI_API_KEY=   # для whisper — пробрасывается из глобального .env через compose
+EOF
+chmod 600 "$TARGET/hermes_data/.env"
+
+# Выставляем владельца — HERMES_UID/HERMES_GID = 1000 (совпадает с chown).
 # Используем docker alpine для chown, т.к. deploy user может не иметь прав на chown.
 docker run --rm \
-    -v "$(pwd)/$TARGET/openclaw_data:/data1" \
+    -v "$(pwd)/$TARGET/hermes_data:/data1" \
     -v "$(pwd)/$TARGET/workspace:/data2" \
     alpine chown -R 1000:1000 /data1 /data2
 
@@ -144,8 +141,8 @@ service = f"""
     env_file:
       - instances/{name}/.env
     volumes:
-      - ./instances/{name}/openclaw_data:/home/node/.openclaw
-      - ./instances/{name}/workspace:/home/node/.openclaw/workspace
+      - ./instances/{name}/hermes_data:/opt/data
+      - ./instances/{name}/workspace:/opt/data/workspace
       - ./shared/skills:/shared/skills
       - ./shared/docs:/shared/docs
       - ./shared/compliance-data:/shared/compliance-data:ro
@@ -155,9 +152,11 @@ service = f"""
       - SERVICE_API_KEY=${{SERVICE_API_KEY}}
       - BROKER_URL=http://message-broker:8080
       - BROKER_KEY=${{{f"BROKER_KEY_{NAME_UPPER}"}}}
-      - NODE_OPTIONS=--max-old-space-size=768
+      - HERMES_UID=1000
+      - HERMES_GID=1000
+      - HERMES_DASHBOARD=1
     ports:
-      - "127.0.0.1:{ui_port}:18789"   # OpenClaw Control UI
+      - "127.0.0.1:{ui_port}:9119"   # Hermes Dashboard
     networks:
       - corp-internal    # quota-proxy + broker (internal)
       - corp-outbound    # Telegram API + внешние вызовы
@@ -193,7 +192,7 @@ PYEOF
 echo ""
 echo "✅ Инстанс '$NAME' создан"
 echo "   Квота: 1,000,000 токенов/мес (изменить: make set-limit NAME=$NAME LIMIT=500000)"
-echo "   Control UI: http://localhost:$UI_PORT"
+echo "   Dashboard: http://localhost:$UI_PORT"
 echo ""
 echo "📋 Далее:"
 echo "  1. nano instances/$NAME/.env               — персональные токены"

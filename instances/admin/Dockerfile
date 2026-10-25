@@ -1,4 +1,4 @@
-FROM ghcr.io/openclaw/openclaw:latest
+FROM nousresearch/hermes-agent:stable
 
 USER root
 
@@ -15,5 +15,5 @@ RUN apt-get update -qq && \
     apt-get update -qq && \
     apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin && \
     rm -rf /var/lib/apt/lists/*
-
-USER node
+# Пользователь внутри контейнера маппится на этапе запуска
+# через HERMES_UID/HERMES_GID (s6-overlay stage2), USER в конце не ставим.

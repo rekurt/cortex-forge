@@ -12,7 +12,7 @@ To wire it up, either:
       ${ENRICH_PY_PATH:-./service-agent/skills/compliance/enrich_placeholder.py}:/app/skills/compliance/enrich.py:ro
 
     Set ENRICH_PY_PATH in .env to the actual path:
-      ENRICH_PY_PATH=/home/user/.openclaw/workspace/skills/compliance-risk/scripts/enrich.py
+      ENRICH_PY_PATH=/opt/data/workspace/skills/compliance-risk/scripts/enrich.py
 
   Option B — copy before build:
     cp ~/workspace/skills/compliance-risk/scripts/enrich.py \\

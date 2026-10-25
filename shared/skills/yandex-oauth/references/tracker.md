@@ -19,7 +19,7 @@ Base URL: `https://api.tracker.yandex.net/v2`
 ## Готовый скрипт
 
 ```bash
-python3 /home/user/.openclaw/workspace/tracker.py
+python3 /opt/data/workspace/tracker.py
 ```
 
 ## Создать задачу

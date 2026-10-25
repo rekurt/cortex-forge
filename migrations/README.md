@@ -9,7 +9,7 @@
 DESCRIPTION = "что делает миграция"
 
 def apply(workspace: pathlib.Path):
-    """workspace — путь к instances/<name>/openclaw_data/workspace/"""
+    """workspace — путь к instances/<name>/workspace/"""
     ...
 ```
 

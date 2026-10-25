@@ -1,0 +1,15 @@
+# Конфигурация Hermes Agent — admin
+# Маунтится в /opt/data/config.yaml (том hermes_data → ~/.hermes)
+# Секреты лежат рядом в /opt/data/.env:
+#   TELEGRAM_BOT_TOKEN, TELEGRAM_ALLOWED_USERS, HERMES_GATEWAY_TOKEN,
+#   ANTHROPIC_API_KEY (admin ходит напрямую, минуя quota-proxy)
+
+model:
+  provider: anthropic
+  default: claude-sonnet-4-6
+  api_mode: anthropic_messages
+
+terminal:
+  cwd: /opt/data/workspace
+
+timezone: Europe/Moscow

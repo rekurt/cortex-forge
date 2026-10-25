@@ -8,7 +8,7 @@ echo "🔒 Исправляем права файлов..."
 [ -f .env ] && chmod 600 .env && echo "  ✅ .env → 600"
 
 # Секреты инстансов
-for f in instances/*/.env instances/*/openclaw.json; do
+for f in instances/*/.env instances/*/hermes_data/config.yaml instances/*/hermes_data/.env; do
     [ -f "$f" ] && chmod 600 "$f" && echo "  ✅ $f → 600"
 done
 
