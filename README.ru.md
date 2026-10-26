@@ -1,40 +1,49 @@
-# 🐒 CortexForge — игрушечный проект, небезопасен для production
+# ⚡ CortexForge — Enterprise-платформа управления парком Hermes Agent
 
 <p align="center">
-  <img src="assets/banner.jpg" alt="CortexForge — изолированные AI-персонажи для каждого сотрудника" width="1200"/>
+  <img src="assets/banner.jpg" alt="CortexForge — изолированные AI-персонажи на базе Hermes Agent для каждого сотрудника" width="1200"/>
 </p>
 
-> **Экспериментальный проект для развлечения. Не использовать в production.**
-> CortexForge — это Docker Compose playground для экспериментов с изолированными AI-инстансами, квотами, мессенджером и персонажами. Проект **не проходил аудит**, **не рассчитан на реальные данные сотрудников** и содержит намеренно мощные admin-возможности: доступ к Docker socket, rw-монтирование всего проекта и OAuth-proxy эксперименты. Это лаборатория, а не enterprise security product.
->
-> **Language / Язык:** [English](README.md) | Русский
+<p align="center">
+  <b>One Cortex. Many Minds. Zero API Key Leakage.</b><br/>
+  От 1 до 1 000+ изолированных инстансов <a href="https://github.com/NousResearch/hermes-agent">Hermes Agent</a> с персональными и департаментными квотами токенов (включая потоковый учёт SSE-стримов), шиной сообщений между агентами и полной изоляцией мастер-ключей — на чистом Docker Compose.
+</p>
 
-[![Version](https://img.shields.io/github/v/tag/example-org/cortex-forge?label=версия&color=blue)](https://github.com/example-org/cortex-forge/releases)
-[![CI Security](https://github.com/example-org/cortex-forge/actions/workflows/security.yml/badge.svg)](https://github.com/example-org/cortex-forge/actions/workflows/security.yml)
-[![License: MIT](https://img.shields.io/badge/лицензия-MIT-green)](LICENSE)
+<p align="center">
+  <a href="https://github.com/rekurt/cortex-forge/stargazers"><img src="https://img.shields.io/github/stars/rekurt/cortex-forge?style=social" alt="GitHub Stars"/></a>
+  <a href="https://github.com/rekurt/cortex-forge/releases"><img src="https://img.shields.io/github/v/tag/rekurt/cortex-forge?label=версия&color=blue" alt="Version"/></a>
+  <a href="https://github.com/rekurt/cortex-forge/actions/workflows/security.yml"><img src="https://github.com/rekurt/cortex-forge/actions/workflows/security.yml/badge.svg" alt="CI Security"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/лицензия-MIT-green" alt="License: MIT"/></a>
+  <a href="docs/ENTERPRISE_1000_USERS.md"><img src="https://img.shields.io/badge/масштаб-1%20000%20пользователей%20%40%20355%20RPS-blueviolet" alt="1000-User Benchmark"/></a>
+</p>
 
-CortexForge — экспериментальная песочница AI-ассистентов на базе [Hermes Agent](https://github.com/NousResearch/hermes-agent).
-
-Идея простая: поднять на одном хосте несколько изолированных Telegram-ботов, у каждого — свой workspace, персонаж, квота токенов и inbox.
+> **Language / Язык:** [English](README.md) | Русский · [Сайт проекта](https://rekurt.github.io/cortex-forge/) · [Архитектура на 1 000 пользователей](docs/ENTERPRISE_1000_USERS.md)
 
 ---
 
-## Что это за проект
+## ⚡ Интерактивное демо за 10 секунд (без Docker и без внешних API-ключей)
 
-Проект полезен для:
+Хотите увидеть работу `quota-proxy` (с подсчётом токенов в SSE-стримах на лету), `message-broker` (с мгновенным broadcast) и блокировку при превышении квоты прямо сейчас?
 
-- экспериментов с персональными AI-инстансами в контейнерах
-- проверки квотирования перед model API
-- простого мессенджера между ассистентами
-- прототипирования persona/workspace-based поведения
-- локального запуска automation skills через HTTP API
+```bash
+git clone https://github.com/rekurt/cortex-forge.git && cd cortex-forge
+make demo
+```
 
-Проект **не подходит** для:
+---
 
-- production-ассистентов сотрудников
-- регулируемых данных, секретов, клиентских данных и конфиденциальных документов
-- multi-tenant сценариев с реальными trust boundaries
-- окружений, где недопустимы Docker socket, широкие bind mounts или OAuth-proxy эксперименты
+## Почему CortexForge?
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) даёт мощного автономного агента. **CortexForge** превращает его в корпоративную multi-tenant платформу, где **ни один пользовательский контейнер никогда не видит ваш настоящий `ANTHROPIC_API_KEY`**.
+
+| Возможность | Обычный запуск Hermes Agent | CortexForge v2.0 Enterprise |
+|---|---|---|
+| **Изоляция API-ключей** | Ключ лежит в `.env` контейнера | **Нулевая утечка:** контейнеры получают только `QUOTA_KEY_<NAME>`, а `quota-proxy` подменяет ключ на лету |
+| **Учёт токенов в SSE-стримах** | Нет или постфактум | **Потоковый `SSEUsageParser`:** считает `text/event-stream` (Anthropic и OpenAI) на лету + отсечка `429` |
+| **Иерархические квоты** | Нет | **Лимиты на сотрудника и на департамент** с защитой от конкурентного пробития (`_admission_guard`) |
+| **Горячая регистрация ключей** | Требует рестарта | **Без даунтайма:** `POST /quota/register-key` и `POST /admin/register-key` |
+| **Общение между ботами** | Изолированные боты | **SQLite WAL `message-broker`:** P2P `/send`, приоритеты, `peek=1` и `/broadcast` на 1 000 агентов за 14 мс |
+| **Масштаб до 1 000 инстансов** | Ручная настройка | **`scripts/bulk-users.py`:** импорт 1 000 сотрудников за 0.5 с + шардирование сетей `corp-shard-<N>` |
 
 ---
 

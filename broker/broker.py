@@ -14,6 +14,8 @@ Hardening & Enterprise capabilities:
     composite indexes, throttled batch purge, ThreadingHTTPServer)
 """
 
+from __future__ import annotations
+
 import hashlib
 import hmac
 import json

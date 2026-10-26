@@ -1,4 +1,4 @@
-.PHONY: add-user remove-user bulk-import fleet-status bootstrap deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview benchmark-1k
+.PHONY: add-user remove-user bulk-import fleet-status bootstrap deploy restart logs backup status quota-report quota-reset set-limit security-check monitor monitor-alerts add-service service-health service-skills install-hooks admin-overview benchmark-1k demo
 
 # ── Управление инстансами ──────────────────────────────────────────────────
 
@@ -30,6 +30,10 @@ fleet-status:
 # make benchmark-1k — нагрузочный бенчмарк на 1000 конкурентных пользователей
 benchmark-1k:
 	@python3 scripts/benchmark-1000-users.py
+
+# make demo — быстрое 5-секундное интерактивное демо без Docker и внешних ключей
+demo:
+	@bash scripts/quickstart-demo.sh
 
 # ── Деплой ────────────────────────────────────────────────────────────────
 
