@@ -5,6 +5,18 @@ All notable changes to CortexForge will be documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org/).
 Releases are automated via [release-please](https://github.com/googleapis/release-please).
 
+## [1.0.0](https://github.com/rekurt/cortex-forge/compare/v0.6.0...v1.0.0) (2026-10-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* Migrate to Hermes Agent (v2.0.0) ([#31](https://github.com/rekurt/cortex-forge/issues/31))
+
+### Features
+
+* Add Enterprise 1000-user scaling, SSE quota accounting, and bulk provisioning ([#33](https://github.com/rekurt/cortex-forge/issues/33)) ([02997fb](https://github.com/rekurt/cortex-forge/commit/02997fb73624407a73da2f420314d7e0c3da7a36))
+* Migrate to Hermes Agent (v2.0.0) ([#31](https://github.com/rekurt/cortex-forge/issues/31)) ([c68d20e](https://github.com/rekurt/cortex-forge/commit/c68d20e984aeac6b0040d7a8f8feb46a285b5d69))
+
 ## [0.6.0](https://github.com/rekurt/cortex-forge/compare/v0.5.1...v0.6.0) (2026-10-09)
 
 
