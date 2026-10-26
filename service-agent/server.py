@@ -12,6 +12,8 @@ Auth: Authorization: Bearer <SERVICE_API_KEY>
 Python stdlib only. No pip.
 """
 
+from __future__ import annotations
+
 import os
 import re
 import hmac

@@ -15,6 +15,7 @@ Hardening:
   - Лимиты в SQLite (переживают рестарт, меняются без рестарта)
 """
 
+from __future__ import annotations
 import json, os, pwd, grp, re, signal, sqlite3, threading, time, hmac, hashlib
 from contextlib import contextmanager
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler

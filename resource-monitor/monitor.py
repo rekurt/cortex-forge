@@ -9,6 +9,8 @@ Exposes HTTP API on MONITOR_PORT (default 9091).
 Python stdlib only. No pip.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import json
