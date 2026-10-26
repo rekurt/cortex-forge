@@ -5,7 +5,7 @@ All notable changes to CortexForge will be documented here.
 Format follows [Conventional Commits](https://www.conventionalcommits.org/).
 Releases are automated via [release-please](https://github.com/googleapis/release-please).
 
-## [1.0.0](https://github.com/rekurt/cortex-forge/compare/v0.6.0...v1.0.0) (2026-10-26)
+## [2.0.0](https://github.com/rekurt/cortex-forge/compare/v0.6.0...v2.0.0) (2026-10-26)
 
 
 ### ⚠ BREAKING CHANGES
