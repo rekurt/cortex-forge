@@ -587,6 +587,14 @@ docker compose restart assistant-service
 
 ---
 
+## Sponsored support
+
+<a href="https://www.scoutapm.com"><img src="https://avatars.githubusercontent.com/u/458509?s=200&amp;v=4" alt="Scout Monitoring" width="100"/></a>
+
+[Scout](https://www.scoutapm.com) provides sponsored monitoring access for CortexForge.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE)
