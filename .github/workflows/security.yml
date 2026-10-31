@@ -54,7 +54,7 @@ jobs:
             print(f\"  [{i['issue_severity']}] {i['issue_text']} — {i['filename']}:{i['line_number']}\")
           "
       - name: Upload Bandit results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bandit-results
@@ -98,7 +98,7 @@ jobs:
           no-fail: true
           failure-threshold: error
       - name: Upload Hadolint results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: hadolint-results
