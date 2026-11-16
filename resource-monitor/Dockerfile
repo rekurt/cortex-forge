@@ -1,4 +1,4 @@
-FROM python:3.14-slim
+FROM python:3.15-slim
 RUN useradd -r -s /usr/sbin/nologin app
 WORKDIR /app
 COPY monitor.py .
